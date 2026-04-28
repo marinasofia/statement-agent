@@ -46,3 +46,4 @@ class AgentState(TypedDict, total=False):
     output_path: str
     job_id: str
     error: str
+    statement_month: str

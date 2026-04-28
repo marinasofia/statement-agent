@@ -5,6 +5,7 @@ import os
 import re
 import unicodedata
 import logging
+from datetime import datetime
 from openpyxl import Workbook, load_workbook
 from core.llm import call_claude, clean_json_response
 from core.config import MAX_FILE_SIZE_MB, ALLOWED_UPLOAD_DIR, EXCEL_OUTPUT_PATH
@@ -133,17 +134,59 @@ def node_validate_output(state: dict) -> dict:
 
     job_id = state.get("job_id", "")
 
-    try:
-        data = json.loads(state.get("extracted_json", ""))
+    def try_parse_and_validate(json_str: str):
+        data = json.loads(json_str)
         validated = StatementData(**data)
-        logger.info(f"Job {job_id}: Pydantic validation passed")
-        return {**state, "validated_data": validated.model_dump()}
+        return validated.model_dump()
 
-    except json.JSONDecodeError:
-        return {**state, "error": "Invalid JSON in extracted_json"}
-    except Exception as e:
-        logger.error(f"Job {job_id}: Validation failed — {e}")
-        return {**state, "error": f"Validation error: {str(e)}"}
+    # First attempt
+    try:
+        result = try_parse_and_validate(state.get("extracted_json", ""))
+        logger.info(f"Job {job_id}: Pydantic validation passed")
+
+        # Parse statement_month from statement_date if it exists
+        statement_month = None
+        statement_date = result.get("statement_date")
+        if statement_date:
+            try:
+                parsed = datetime.strptime(statement_date, "%Y-%m-%d")
+                statement_month = parsed.strftime("%Y-%m")
+            except ValueError:
+                logger.warning(f"Job {job_id}: Could not parse statement_date '{statement_date}' into month")
+
+        return {**state, "validated_data": result, "statement_month": statement_month}
+
+    except Exception as first_error:
+        logger.warning(f"Job {job_id}: First validation failed — {first_error}. Retrying with corrective prompt.")
+
+    # Corrective prompt — second attempt
+    try:
+        corrective_system = """You are a JSON repair engine. You will be given a broken JSON object and an error message.
+            Return ONLY a corrected valid JSON object. No explanation. No markdown. No code blocks."""
+
+        corrective_user = f"""This JSON failed validation with this error:
+            {first_error}
+
+            Broken JSON:
+            {state.get("extracted_json", "")}
+
+            Return a corrected version that fixes the error and matches this exact schema:
+            - account_holder (string, required)
+            - closing_balance (number, required)
+            - account_number (string or null)
+            - statement_date (string or null)
+            - transactions (array of {{date, description, amount}} or null)"""
+
+        raw_retry = call_claude(corrective_system, corrective_user)
+        cleaned_retry = clean_json_response(raw_retry)
+        result = try_parse_and_validate(cleaned_retry)
+
+        logger.info(f"Job {job_id}: Pydantic validation passed on retry")
+        return {**state, "extracted_json": cleaned_retry, "validated_data": result}
+
+    except Exception as second_error:
+        logger.error(f"Job {job_id}: Validation failed after retry — {second_error}")
+        return {**state, "error": f"HUMAN_REVIEW_REQUIRED — validation failed after retry: {str(second_error)}"}
 
 def node_excel_output(state: dict) -> dict:
     if state.get("error"):
