@@ -13,7 +13,11 @@ from agents.statement_extraction.schema import StatementData
 logger = logging.getLogger(__name__)
 
 def is_safe_path(file_path: str) -> bool:
-    return os.path.realpath(file_path).startswith(ALLOWED_UPLOAD_DIR)
+    real_path = os.path.realpath(file_path)
+    allowed = os.path.realpath(ALLOWED_UPLOAD_DIR)
+    if not allowed.endswith(os.sep):
+        allowed += os.sep
+    return real_path.startswith(allowed) or real_path == allowed.rstrip(os.sep)
 
 def sanitize_text(text: str) -> str:
     text = unicodedata.normalize("NFKC", text)
