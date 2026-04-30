@@ -1,0 +1,7 @@
+client_id: default
+client_name: Default Client
+
+# Client-level approval status. Flipped by the UI in Phase 5.
+approved: false
+approved_by: null
+approved_at: null

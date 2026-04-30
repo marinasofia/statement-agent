@@ -1,0 +1,52 @@
+format_id: default
+format_name: Default Format
+
+detection:
+  signatures: []
+  min_matches: 1
+
+fields:
+  - name: account_holder
+    label: Account Holder
+    type: string
+    required: true
+    description: Full name of the account holder
+
+  - name: closing_balance
+    label: Closing Balance
+    type: float
+    required: true
+    description: Final balance at end of statement period
+
+  - name: account_number
+    label: Account Number
+    type: string
+    required: false
+    description: Bank account number or identifier
+
+  - name: statement_date
+    label: Statement Date
+    type: string
+    required: false
+    description: Date the statement was issued or period end date
+
+  - name: currency
+    label: Currency
+    type: string
+    required: false
+    description: Currency of the closing balance (USD, EUR, GBP, etc.)
+
+  - name: bank_name
+    label: Bank Name
+    type: string
+    required: false
+    description: Name of the bank that issued the statement
+
+excel_output:
+  columns:
+    - account_holder
+    - bank_name
+    - account_number
+    - closing_balance
+    - currency
+    - statement_date
