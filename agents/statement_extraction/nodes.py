@@ -143,11 +143,12 @@ def node_validate_output(state: dict) -> dict:
         return validated.model_dump()
 
     # First attempt
+    # First attempt
+    first_error = None
     try:
         result = try_parse_and_validate(state.get("extracted_json", ""))
         logger.info(f"Job {job_id}: Pydantic validation passed")
 
-        # Parse statement_month from statement_date if it exists
         statement_month = None
         statement_date = result.get("statement_date")
         if statement_date:
@@ -159,9 +160,10 @@ def node_validate_output(state: dict) -> dict:
 
         return {**state, "validated_data": result, "statement_month": statement_month}
 
-    except Exception as first_error:
+    except Exception as e:
+        first_error = e
         logger.warning(f"Job {job_id}: First validation failed — {first_error}. Retrying with corrective prompt.")
-
+        
     # Corrective prompt — second attempt
     try:
         corrective_system = """You are a JSON repair engine. You will be given a broken JSON object and an error message.
@@ -178,6 +180,8 @@ def node_validate_output(state: dict) -> dict:
             - closing_balance (number, required)
             - account_number (string or null)
             - statement_date (string or null)
+            - currency (string or null)
+            - bank_name (string or null)
             - transactions (array of {{date, description, amount}} or null)"""
 
         raw_retry = call_claude(corrective_system, corrective_user)
