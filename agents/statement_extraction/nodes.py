@@ -98,6 +98,8 @@ def node_claude_extraction(state: dict) -> dict:
         - account_number (string)
         - statement_date (string)
         - closing_balance (number)
+        - currency (string) — currency code of the closing balance e.g. USD, EUR, GBP
+        - bank_name (string) — name of the bank that issued the statement
         - transactions (array of objects with: date, description, amount)
 
         OUTPUT RULES:
