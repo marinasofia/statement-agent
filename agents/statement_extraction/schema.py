@@ -35,6 +35,8 @@ class StatementData(BaseModel):
     closing_balance: float     # required
     account_number: Optional[str] = None
     statement_date: Optional[str] = None
+    currency: Optional[str] = None
+    bank_name: Optional[str] = None
     transactions: Optional[List[Transaction]] = None
 
 class AgentState(TypedDict, total=False):
@@ -47,3 +49,5 @@ class AgentState(TypedDict, total=False):
     job_id: str
     error: str
     statement_month: str
+    client_id: str
+    format_id: str
