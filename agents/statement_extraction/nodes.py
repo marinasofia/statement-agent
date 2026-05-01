@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
 from core.llm import call_claude, clean_json_response
+from core.client_config import get_client_id, load_format_config
 from core.config import MAX_FILE_SIZE_MB, ALLOWED_UPLOAD_DIR, EXCEL_OUTPUT_PATH
 from agents.statement_extraction.schema import StatementData
 
@@ -195,23 +196,75 @@ def node_excel_output(state: dict) -> dict:
     validated_data = state.get("validated_data", {})
     job_id = state.get("job_id", "")
 
+    client_id = state.get("client_id") or get_client_id()
+    format_id = state.get("format_id") or "default"
+
+    try:
+        config = load_format_config(client_id, format_id)
+    except Exception as e:
+        logger.error(f"Job {job_id}: Failed to load format config — {e}")
+        return {**state, "error": f"Failed to load format config: {str(e)}"}
+
+    columns = config.get("excel_output", {}).get("columns", [])
+    if not columns:
+        return {**state, "error": "excel_output.columns missing or empty in format config"}
+    if "account_holder" not in columns:
+        return {**state, "error": "account_holder must be in excel_output.columns for deduplication"}
+
+    fields = config.get("fields", [])
+    label_by_name = {f["name"]: f.get("label", f["name"]) for f in fields}
+    headers = [label_by_name.get(col, col) for col in columns]
+
+    statement_month = state.get("statement_month") or "Unsorted"
+
     try:
         os.makedirs(os.path.dirname(EXCEL_OUTPUT_PATH), exist_ok=True)
 
         if os.path.exists(EXCEL_OUTPUT_PATH):
             wb = load_workbook(EXCEL_OUTPUT_PATH)
-            ws = wb.active
         else:
             wb = Workbook()
-            ws = wb.active
-            ws.title = "Statements"
-            ws.append(["Account Holder", "Closing Balance"])
+            wb.remove(wb.active)
+
+        if statement_month in wb.sheetnames:
+            ws = wb[statement_month]
+        else:
+            ws = wb.create_sheet(title=statement_month)
+            ws.append(headers)
             ws.freeze_panes = "A2"
 
-        ws.append([validated_data.get("account_holder"), validated_data.get("closing_balance")])
+        account_holder = validated_data.get("account_holder")
+        account_number = validated_data.get("account_number")
+        ah_idx = columns.index("account_holder")
+        an_idx = columns.index("account_number") if "account_number" in columns else None
+
+        existing = set()
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            holder = row[ah_idx]
+            number = row[an_idx] if an_idx is not None else None
+            if holder is not None:
+                existing.add((holder, number))
+
+        if (account_holder, account_number) in existing:
+            logger.info(f"Job {job_id}: Skipping duplicate — {account_holder} / {account_number} in {statement_month}")
+            return {**state, "output_path": EXCEL_OUTPUT_PATH, "skipped_duplicate": True}
+
+        data_row = [validated_data.get(col) for col in columns]
+        ws.append(data_row)
+
+        for i, col_name in enumerate(columns, start=1):
+            label = label_by_name.get(col_name, col_name)
+            all_values = [label]
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                cell_value = row[i - 1]
+                if cell_value is not None:
+                    all_values.append(str(cell_value))
+            width = int(max(len(v) for v in all_values) * 1.2) + 4
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
+
         wb.save(EXCEL_OUTPUT_PATH)
 
-        logger.info(f"Job {job_id}: Written to {EXCEL_OUTPUT_PATH}")
+        logger.info(f"Job {job_id}: Written to {EXCEL_OUTPUT_PATH} ({statement_month})")
         return {**state, "output_path": EXCEL_OUTPUT_PATH}
 
     except Exception as e:

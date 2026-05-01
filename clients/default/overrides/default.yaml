@@ -1,0 +1,4 @@
+excel_output:
+  columns:
+    - account_holder
+    - closing_balance
