@@ -45,6 +45,7 @@ class AgentState(TypedDict, total=False):
     format: str           # "text" or "scanned"
     extracted_json: str   # raw JSON string from Claude
     validated_data: dict  # parsed + Pydantic-validated dict
+    skip_excel: bool
     output_path: str
     job_id: str
     error: str

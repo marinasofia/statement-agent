@@ -163,7 +163,7 @@ def node_validate_output(state: dict) -> dict:
     except Exception as e:
         first_error = e
         logger.warning(f"Job {job_id}: First validation failed — {first_error}. Retrying with corrective prompt.")
-        
+
     # Corrective prompt — second attempt
     try:
         corrective_system = """You are a JSON repair engine. You will be given a broken JSON object and an error message.
@@ -197,6 +197,9 @@ def node_validate_output(state: dict) -> dict:
 
 def node_excel_output(state: dict) -> dict:
     if state.get("error"):
+        return state
+
+    if state.get("skip_excel"):
         return state
 
     validated_data = state.get("validated_data", {})
