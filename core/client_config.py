@@ -28,6 +28,37 @@ import logging
 from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
+from pydantic import BaseModel
+from typing import Optional
+
+class ClientSettings(BaseModel):
+    client_id: str
+    client_name: str
+    approved: bool = False
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+
+class FieldDefinition(BaseModel):
+    name: str
+    label: str
+    type: str
+    required: bool = False
+    description: Optional[str] = None
+
+class DetectionConfig(BaseModel):
+    signatures: list = []
+    min_matches: int = 1
+
+class ExcelOutput(BaseModel):
+    columns: list[str] = []
+
+class FormatConfig(BaseModel):
+    format_id: str
+    format_name: str
+    fields: list[FieldDefinition]
+    detection: DetectionConfig = DetectionConfig()
+    excel_output: ExcelOutput = ExcelOutput()
+
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +140,7 @@ def load_client_settings(client_id: str) -> dict:
         settings = yaml.safe_load(f) or {}
 
     logger.info(f"Loaded settings for client='{client_id}'")
-    return settings
+    return ClientSettings(**settings).model_dump()
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +212,7 @@ def load_format_config(client_id: str, format_id: str) -> dict:
             f"(no override)"
         )
 
-    return config
+    return FormatConfig(**config).model_dump()
 
 
 # ---------------------------------------------------------------------------
