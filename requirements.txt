@@ -27,6 +27,7 @@ openpyxl==3.1.5
 orjson==3.11.8
 ormsgpack==1.12.2
 packaging==26.2
+pathspec==1.1.1
 pdfminer.six==20251230
 pdfplumber==0.11.9
 pillow==12.2.0
@@ -48,4 +49,5 @@ typing_extensions==4.15.0
 urllib3==2.6.3
 uuid_utils==0.14.1
 xxhash==3.7.0
+yamllint==1.38.0
 zstandard==0.25.0

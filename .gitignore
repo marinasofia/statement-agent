@@ -7,3 +7,4 @@ outputs/
 uploads/
 ~$*.xlsx
 *.xlsx
+.venv/
