@@ -143,7 +143,6 @@ def node_validate_output(state: dict) -> dict:
         return validated.model_dump()
 
     # First attempt
-    # First attempt
     first_error = None
     try:
         result = try_parse_and_validate(state.get("extracted_json", ""))
