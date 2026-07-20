@@ -142,22 +142,22 @@ def node_validate_output(state: dict) -> dict:
         validated = StatementData(**data)
         return validated.model_dump()
 
+    def derive_statement_month(result: dict):
+        statement_date = result.get("statement_date")
+        if not statement_date:
+            return None
+        try:
+            return datetime.strptime(statement_date, "%Y-%m-%d").strftime("%Y-%m")
+        except ValueError:
+            logger.warning(f"Job {job_id}: Could not parse statement_date '{statement_date}' into month")
+            return None
+
     # First attempt
     first_error = None
     try:
         result = try_parse_and_validate(state.get("extracted_json", ""))
         logger.info(f"Job {job_id}: Pydantic validation passed")
-
-        statement_month = None
-        statement_date = result.get("statement_date")
-        if statement_date:
-            try:
-                parsed = datetime.strptime(statement_date, "%Y-%m-%d")
-                statement_month = parsed.strftime("%Y-%m")
-            except ValueError:
-                logger.warning(f"Job {job_id}: Could not parse statement_date '{statement_date}' into month")
-
-        return {**state, "validated_data": result, "statement_month": statement_month}
+        return {**state, "validated_data": result, "statement_month": derive_statement_month(result)}
 
     except Exception as e:
         first_error = e
@@ -188,7 +188,7 @@ def node_validate_output(state: dict) -> dict:
         result = try_parse_and_validate(cleaned_retry)
 
         logger.info(f"Job {job_id}: Pydantic validation passed on retry")
-        return {**state, "extracted_json": cleaned_retry, "validated_data": result}
+        return {**state, "extracted_json": cleaned_retry, "validated_data": result, "statement_month": derive_statement_month(result)}
 
     except Exception as second_error:
         logger.error(f"Job {job_id}: Validation failed after retry — {second_error}")
