@@ -9,6 +9,13 @@ def test_rejects_non_pdf():
     result = node_validate_file(state)
     assert result["error"] == "File must be a PDF"
 
+def test_accepts_uppercase_pdf_extension():
+    state = {"file_path": "uploads/STATEMENT.PDF"}
+    result = node_validate_file(state)
+    # Extension check passes; the file does not exist, so the error
+    # must be about existence, not about the file type.
+    assert result["error"] != "File must be a PDF"
+
 def test_rejects_missing_file():
     state = {"file_path": "uploads/does_not_exist.pdf"}
     result = node_validate_file(state)

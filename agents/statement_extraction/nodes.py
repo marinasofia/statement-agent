@@ -31,7 +31,7 @@ def node_validate_file(state: dict) -> dict:
 
     if not file_path:
         return {**state, "error": "No file path provided"}
-    if not file_path.endswith(".pdf"):
+    if not file_path.lower().endswith(".pdf"):
         return {**state, "error": "File must be a PDF"}
     if not os.path.exists(file_path):
         return {**state, "error": f"File not found: {file_path}"}
