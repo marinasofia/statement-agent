@@ -24,7 +24,18 @@ def test_rejects_missing_file():
 def test_rejects_path_outside_allowed_dir():
     state = {"file_path": "../../../etc/passwd.pdf"}
     result = node_validate_file(state)
-    assert result["error"] is not None
+    assert "Access denied" in result["error"]
+
+def test_outside_paths_are_indistinguishable_whether_they_exist():
+    # Containment is checked before existence, so a caller cannot use the
+    # error message to probe which files exist on the host.
+    real = node_validate_file({"file_path": "/etc/hosts.pdf"})["error"]
+    fake = node_validate_file({"file_path": "/etc/nope-does-not-exist.pdf"})["error"]
+    assert real == fake == "Access denied: file outside allowed directory"
+
+def test_errors_do_not_echo_the_supplied_path():
+    for path in ("../../../etc/passwd.pdf", "uploads/does_not_exist.pdf"):
+        assert path not in node_validate_file({"file_path": path})["error"]
 
 def test_clean_json_strips_markdown_fences():
     raw = '```json\n{"account_holder": "Jane Doe"}\n```'

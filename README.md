@@ -25,7 +25,7 @@ Batch processing runs concurrently via ThreadPoolExecutor (default 5 workers), s
 
 Three hardening layers, each independently tested:
 
-**Path traversal defense.** All file paths are resolved to their absolute form and checked against the allowed upload directory. A path containing `../` that would escape the directory is rejected.
+**Path traversal defense.** All file paths are resolved to their absolute form and checked against the allowed upload directory. A path containing `../` that would escape the directory is rejected. Containment is checked before existence, and errors never echo the supplied path, so the rejection message cannot be used to probe which files exist on the host.
 
 **Prompt injection hardening.** System prompts instruct the model to treat document text as data only and ignore embedded instructions. Document content is never concatenated into the system prompt.
 
@@ -75,7 +75,7 @@ Output lands in `outputs/statements_batch.xlsx`.
 python3 -m pytest -v
 ```
 
-6 tests covering file validation (non PDF rejection, missing file, path traversal), JSON cleanup (markdown fence stripping), text sanitization (invisible character removal), and schema validation (malformed date rejection).
+9 tests covering file validation (non PDF rejection, missing file, path traversal, and that a rejected path is indistinguishable whether or not it exists), JSON cleanup (markdown fence stripping), text sanitization (invisible character removal), and schema validation (malformed date rejection).
 
 ## Limitations
 

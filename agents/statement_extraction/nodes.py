@@ -33,10 +33,14 @@ def node_validate_file(state: dict) -> dict:
         return {**state, "error": "No file path provided"}
     if not file_path.lower().endswith(".pdf"):
         return {**state, "error": "File must be a PDF"}
-    if not os.path.exists(file_path):
-        return {**state, "error": f"File not found: {file_path}"}
+    # Containment is checked before existence on purpose. Testing existence
+    # first answers "does /etc/shadow exist?" for any path the caller supplies,
+    # because "File not found" and "Access denied" are distinguishable replies.
+    # The error also no longer echoes the path back for the same reason.
     if not is_safe_path(file_path):
         return {**state, "error": "Access denied: file outside allowed directory"}
+    if not os.path.exists(file_path):
+        return {**state, "error": "File not found in the allowed upload directory"}
     if os.path.getsize(file_path) > MAX_FILE_SIZE_MB * 1024 * 1024:
         return {**state, "error": f"File exceeds {MAX_FILE_SIZE_MB}MB limit"}
 
