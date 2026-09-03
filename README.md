@@ -9,8 +9,8 @@ The agent is a 5 node LangGraph StateGraph. Each PDF flows through the nodes in 
 1. **Validate file** — confirms the input is a PDF, exists, falls within the allowed directory, and is under the size limit
 2. **Extract text** — pulls the text layer via pdfplumber and strips invisible characters; image-only PDFs stop here
 3. **Detect format** — matches detection signatures from the format library against the text and picks the best match, falling back to the default format
-4. **Claude extraction** — sends the text to Claude with a structured prompt; returns JSON with account holder, transactions, and balances
-5. **Validate output** — runs the JSON through Pydantic v2 models. On failure, fires a corrective prompt and retries once before flagging for human review
+4. **Extract fields** — the only model call. Claude returns a JSON object whose shape is enforced by the API (structured outputs). The node checks the two things the API cannot: that the output was not truncated, and that the values pass the semantic validators (ISO dates, ISO 4217 currency). A validation failure gets one retry that re-runs extraction from the source text with the error appended
+5. **Finalize** — derives the statement month from the validated date. No model call
 
 The batch runner then writes every validated result to one deduplicated Excel workbook, organized by statement month, using the columns configured for the detected format.
 
@@ -83,4 +83,4 @@ This agent works on text based PDFs. Scanned or image only PDFs are not supporte
 
 ## Tech stack
 
-Python · LangGraph · Claude API (Anthropic) · Pydantic v2 · pdfplumber · openpyxl · tenacity · ThreadPoolExecutor
+Python · LangGraph · Claude API (Anthropic, structured outputs) · Pydantic v2 · pdfplumber · openpyxl · ThreadPoolExecutor

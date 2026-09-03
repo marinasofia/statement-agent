@@ -3,7 +3,6 @@ from agents.statement_extraction.nodes import node_validate_file
 from agents.statement_extraction.nodes import sanitize_text
 from agents.statement_extraction.schema import Transaction
 from core.config import ALLOWED_UPLOAD_DIR, PROJECT_ROOT
-from core.llm import clean_json_response
 import pytest
 
 
@@ -53,11 +52,6 @@ def test_upload_dir_is_anchored_to_project_root_not_cwd(tmp_path, monkeypatch):
     assert result["error"] == "Access denied: file outside allowed directory"
     assert ALLOWED_UPLOAD_DIR.startswith(str(PROJECT_ROOT))
 
-def test_clean_json_strips_markdown_fences():
-    raw = '```json\n{"account_holder": "Jane Doe"}\n```'
-    result = clean_json_response(raw)
-    assert result == '{"account_holder": "Jane Doe"}'
-
 def test_sanitize_text_removes_invisible_characters():
     dirty = "Account\u200b\u200bHolder"
     result = sanitize_text(dirty)
@@ -66,6 +60,10 @@ def test_sanitize_text_removes_invisible_characters():
 def test_transaction_rejects_bad_date_format():
     with pytest.raises(Exception):
         Transaction(date="31-31-2025", description="ATM withdrawal", amount=-50.0)
+
+def test_validation_errors_carry_a_machine_readable_code():
+    assert node_validate_file({"file_path": upload("x.txt")})["error_code"] == "NOT_PDF"
+    assert node_validate_file({"file_path": "/etc/hosts.pdf"})["error_code"] == "OUTSIDE_UPLOAD_DIR"
 def test_batch_month_flag_is_validated():
     from run_batch import parse_args
     assert parse_args(["--month", "2026-08"]).month == "2026-08"
