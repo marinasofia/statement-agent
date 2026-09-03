@@ -1,16 +1,40 @@
+import argparse
 import os
 import glob
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openpyxl import Workbook, load_workbook
-from core.config import EXCEL_OUTPUT_PATH
+from core.config import EXCEL_OUTPUT_PATH, ALLOWED_UPLOAD_DIR
 from core.client_config import get_client_id, load_format_config
 from agents.statement_extraction.graph import compiled_graph
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
 
-MAX_WORKERS = 5
+DEFAULT_WORKERS = 5
+MONTH_PATTERN = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Extract every PDF in a folder into one Excel workbook."
+    )
+    parser.add_argument("--input", default=ALLOWED_UPLOAD_DIR,
+                        help="Folder of PDF statements (default: the allowed upload dir)")
+    parser.add_argument("--output", default=EXCEL_OUTPUT_PATH,
+                        help="Workbook to create or append to")
+    parser.add_argument("--month", default=None,
+                        help="Sheet to use for statements that carry no parseable date, as YYYY-MM. "
+                             "Without it those rows land on an 'Unsorted' sheet.")
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
+                        help=f"Concurrent extractions (default {DEFAULT_WORKERS})")
+    args = parser.parse_args(argv)
+    if args.month and not MONTH_PATTERN.match(args.month):
+        parser.error("--month must look like YYYY-MM")
+    if args.workers < 1:
+        parser.error("--workers must be at least 1")
+    return args
 
 def process_pdf(pdf_path: str) -> dict:
     try:
@@ -20,7 +44,7 @@ def process_pdf(pdf_path: str) -> dict:
         logger.error(f"Unhandled error on {pdf_path}: {e}")
         return {'file_path': pdf_path, 'error': str(e)}
 
-def write_excel(results: list, fallback_month: str = None):
+def write_excel(results: list, fallback_month: str = None, output_path: str = EXCEL_OUTPUT_PATH):
     """Write all results to Excel in one pass."""
     client_id = get_client_id()
     config = load_format_config(client_id, "default")
@@ -29,10 +53,10 @@ def write_excel(results: list, fallback_month: str = None):
     label_by_name = {f["name"]: f.get("label", f["name"]) for f in fields}
     headers = [label_by_name.get(col, col) for col in columns]
 
-    os.makedirs(os.path.dirname(EXCEL_OUTPUT_PATH), exist_ok=True)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    if os.path.exists(EXCEL_OUTPUT_PATH):
-        wb = load_workbook(EXCEL_OUTPUT_PATH)
+    if os.path.exists(output_path):
+        wb = load_workbook(output_path)
     else:
         wb = Workbook()
         wb.remove(wb.active)
@@ -98,22 +122,25 @@ def write_excel(results: list, fallback_month: str = None):
                     all_values.append(str(cell_value))
             ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = int(max(len(v) for v in all_values) * 1.2) + 4
 
-    wb.save(EXCEL_OUTPUT_PATH)
+    wb.save(output_path)
     return success, skipped, failed
 
-def main():
-    pdf_files = sorted(glob.glob("uploads/*.pdf"))
+def main(argv=None):
+    args = parse_args(argv)
+    pdf_files = sorted(
+        glob.glob(os.path.join(args.input, "*.pdf")) + glob.glob(os.path.join(args.input, "*.PDF"))
+    )
 
     if not pdf_files:
-        print("No PDFs found in uploads/")
+        print(f"No PDFs found in {args.input}")
         return
 
-    print(f"Found {len(pdf_files)} PDFs. Processing with {MAX_WORKERS} workers...")
+    print(f"Found {len(pdf_files)} PDFs. Processing with {args.workers} workers...")
 
     results = []
     completed = 0
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
         futures = {executor.submit(process_pdf, pdf): pdf for pdf in pdf_files}
         for future in as_completed(futures):
             result = future.result()
@@ -126,18 +153,11 @@ def main():
                 data = result.get("validated_data", {})
                 print(f"[{completed}/{len(pdf_files)}] OK      {pdf_name}: {data.get('account_holder')} | {data.get('closing_balance')}")
 
-    # Check if any PDFs had parseable dates
-    months_found = [r.get("statement_month") for r in results if r.get("statement_month")]
+    # No interactive prompt: an unattended run must never block on stdin.
+    # Rows without a parseable date go to --month if given, else "Unsorted".
+    success, skipped, failed = write_excel(results, args.month, args.output)
 
-    fallback_month = None
-    if not months_found:
-        fallback_month = input("\nNo statement dates found. Enter month for all (YYYY-MM) or press Enter for 'Unsorted': ").strip()
-        if not fallback_month:
-            fallback_month = None
-
-    success, skipped, failed = write_excel(results, fallback_month)
-
-    print(f"\nDone. Output: {EXCEL_OUTPUT_PATH}")
+    print(f"\nDone. Output: {args.output}")
     print(f"  Written:   {success}")
     print(f"  Skipped:   {skipped} (duplicates)")
     print(f"  Failed:    {failed}")

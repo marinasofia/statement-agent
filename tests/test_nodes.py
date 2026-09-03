@@ -66,3 +66,8 @@ def test_sanitize_text_removes_invisible_characters():
 def test_transaction_rejects_bad_date_format():
     with pytest.raises(Exception):
         Transaction(date="31-31-2025", description="ATM withdrawal", amount=-50.0)
+def test_batch_month_flag_is_validated():
+    from run_batch import parse_args
+    assert parse_args(["--month", "2026-08"]).month == "2026-08"
+    with pytest.raises(SystemExit):
+        parse_args(["--month", "August"])
