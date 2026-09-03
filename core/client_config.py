@@ -3,14 +3,11 @@ Client and format config loader.
 
 Architecture:
 - formats_library/{format_id}.yaml  → canonical format definitions (universal)
-- clients/{client_id}/settings.yaml → client metadata (approval, name, etc.)
+- clients/{client_id}/settings.yaml → client metadata (id, display name)
 - clients/{client_id}/overrides/{format_id}.yaml → optional per-client tweaks
 
-Loading rules:
-- The format library is shared at the source-code level; per-client baking
-  into Docker images happens at build time in Phase 6.
-- A client running in production has their own container with only their
-  settings + overrides + a copy of the library.
+The format library is shared source. A client's overrides deep-merge over
+the library entry, so an override only states what differs.
 
 Security model:
 - CLIENT_ID is set once at process boot via environment variable.
@@ -34,9 +31,6 @@ from typing import Optional
 class ClientSettings(BaseModel):
     client_id: str
     client_name: str
-    approved: bool = False
-    approved_by: Optional[str] = None
-    approved_at: Optional[str] = None
 
 class FieldDefinition(BaseModel):
     name: str
