@@ -41,14 +41,11 @@ class StatementData(BaseModel):
 
 class AgentState(TypedDict, total=False):
     file_path: str
+    job_id: str
+    client_id: str
+    format_id: str        # chosen by detect_format from the format library
     raw_text: str
-    format: str           # "text" or "scanned"
     extracted_json: str   # raw JSON string from Claude
     validated_data: dict  # parsed + Pydantic-validated dict
-    skip_excel: bool
-    output_path: str
-    job_id: str
+    statement_month: str  # YYYY-MM, derived from statement_date when parseable
     error: str
-    statement_month: str
-    client_id: str
-    format_id: str

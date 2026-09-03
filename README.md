@@ -4,14 +4,15 @@ An agentic pipeline that turns PDF bank statements into validated, structured Ex
 
 ## How it works
 
-The agent is a 6 node LangGraph StateGraph. Each PDF flows through the nodes in sequence, with conditional routing that skips to the end on any error:
+The agent is a 5 node LangGraph StateGraph. Each PDF flows through the nodes in sequence, with conditional routing that skips to the end on any error:
 
 1. **Validate file** — confirms the input is a PDF, exists, falls within the allowed directory, and is under the size limit
-2. **Detect format** — matches the PDF against known statement layouts in the format library
-3. **Extract text** — pulls raw text from the PDF via pdfplumber
+2. **Extract text** — pulls the text layer via pdfplumber and strips invisible characters; image-only PDFs stop here
+3. **Detect format** — matches detection signatures from the format library against the text and picks the best match, falling back to the default format
 4. **Claude extraction** — sends the text to Claude with a structured prompt; returns JSON with account holder, transactions, and balances
 5. **Validate output** — runs the JSON through Pydantic v2 models. On failure, fires a corrective prompt and retries once before flagging for human review
-6. **Excel output** — writes validated data to a deduplicated Excel workbook, organized by statement month
+
+The batch runner then writes every validated result to one deduplicated Excel workbook, organized by statement month, using the columns configured for the detected format.
 
 Batch processing runs concurrently via ThreadPoolExecutor (default 5 workers), so multiple API calls are in flight simultaneously.
 
