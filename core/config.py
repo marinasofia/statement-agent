@@ -23,10 +23,11 @@ def _path_from_env(var: str, default: Path) -> str:
 
 # --- LLM ---
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
-CLAUDE_MAX_TOKENS = 4096          # High enough for statements with many transactions
-CLAUDE_MAX_RETRIES = 3            # How many times to retry a failed API call
-CLAUDE_RETRY_MIN_WAIT = 2         # Seconds before first retry
-CLAUDE_RETRY_MAX_WAIT = 10        # Max seconds between retries
+CLAUDE_MAX_TOKENS = int(os.getenv("CLAUDE_MAX_TOKENS", "16384"))   # A long statement can run to hundreds of transactions
+CLAUDE_MAX_RETRIES = 3            # SDK retries for 429, 5xx and connection errors
+# Character cap on the text sent to the model. The 20MB file limit says
+# nothing about token count; a text-heavy PDF can exceed the context window.
+MAX_INPUT_CHARS = int(os.getenv("MAX_INPUT_CHARS", "300000"))
 
 # --- File Validation ---
 MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "20"))

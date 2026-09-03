@@ -1,43 +1,93 @@
-from pydantic import BaseModel, field_validator
-from typing import List, Optional, TypedDict
+from enum import StrEnum
 from datetime import datetime
+from typing import List, Optional, TypedDict
 
-class Transaction(BaseModel):
+from pydantic import BaseModel, field_validator
+
+
+class ErrorCode(StrEnum):
+    """Machine-readable reason a job stopped. `error` carries the human text."""
+    NO_FILE_PATH = "NO_FILE_PATH"
+    NOT_PDF = "NOT_PDF"
+    OUTSIDE_UPLOAD_DIR = "OUTSIDE_UPLOAD_DIR"
+    FILE_NOT_FOUND = "FILE_NOT_FOUND"
+    TOO_LARGE = "TOO_LARGE"
+    PDF_READ_FAILED = "PDF_READ_FAILED"
+    SCANNED = "SCANNED"
+    FORMAT_LIBRARY_ERROR = "FORMAT_LIBRARY_ERROR"
+    INPUT_TOO_LARGE = "INPUT_TOO_LARGE"
+    TRUNCATED_OUTPUT = "TRUNCATED_OUTPUT"
+    MODEL_REFUSED = "MODEL_REFUSED"
+    SCHEMA_INVALID = "SCHEMA_INVALID"
+    API_ERROR = "API_ERROR"
+
+
+# Dates the model may return. ISO first because the prompt asks for it.
+# Numeric day/month/year forms with slashes or dots are deliberately not
+# accepted: 03/04/2025 is two different dates depending on the bank's
+# country, and guessing silently is worse than asking the model again.
+_ACCEPTED_DATE_FORMATS = ("%Y-%m-%d", "%d %b %Y", "%d %B %Y", "%b %d, %Y", "%B %d, %Y")
+
+
+def normalise_date(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    for fmt in _ACCEPTED_DATE_FORMATS:
+        try:
+            return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    raise ValueError(
+        f"Unrecognised or ambiguous date '{value}'. Dates must be ISO 8601 (YYYY-MM-DD)."
+    )
+
+
+class TransactionDraft(BaseModel):
     date: Optional[str] = None
     description: str
     amount: float
 
-    @field_validator('date')
-    @classmethod
-    def validate_date(cls, v: str) -> str:
-        if v is None:
-            return v
-        
-        formats = [
-            "%Y-%m-%d",
-            "%d/%m/%Y",
-            "%m/%d/%Y",
-            "%d.%m.%Y",
-            "%d %b %Y",
-            "%d %B %Y",
-        ]
-        for fmt in formats:
-            try:
-                datetime.strptime(v, fmt)
-                return v
-            except ValueError:
-                continue
 
-        raise ValueError(f"Unrecognised date format: '{v}'")
-
-class StatementData(BaseModel):
-    account_holder: str        # required
-    closing_balance: float     # required
+class StatementDraft(BaseModel):
+    """The shape requested from the model. Schema only, no semantic checks,
+    because the API enforces this shape and semantic failures need a retry
+    that sees the source text."""
+    account_holder: str
+    closing_balance: float
     account_number: Optional[str] = None
     statement_date: Optional[str] = None
     currency: Optional[str] = None
     bank_name: Optional[str] = None
+    transactions: Optional[List[TransactionDraft]] = None
+
+
+class Transaction(TransactionDraft):
+    @field_validator("date")
+    @classmethod
+    def validate_date(cls, v: Optional[str]) -> Optional[str]:
+        return normalise_date(v)
+
+
+class StatementData(StatementDraft):
+    """Validated statement. Dates are normalised to ISO on the way through."""
     transactions: Optional[List[Transaction]] = None
+
+    @field_validator("statement_date")
+    @classmethod
+    def validate_statement_date(cls, v: Optional[str]) -> Optional[str]:
+        return normalise_date(v)
+
+    @field_validator("currency")
+    @classmethod
+    def normalise_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v = v.strip().upper()
+        if len(v) != 3 or not v.isalpha():
+            raise ValueError(f"currency must be a 3-letter ISO 4217 code, got '{v}'")
+        return v
+
 
 class AgentState(TypedDict, total=False):
     file_path: str
@@ -45,7 +95,8 @@ class AgentState(TypedDict, total=False):
     client_id: str
     format_id: str        # chosen by detect_format from the format library
     raw_text: str
-    extracted_json: str   # raw JSON string from Claude
-    validated_data: dict  # parsed + Pydantic-validated dict
-    statement_month: str  # YYYY-MM, derived from statement_date when parseable
-    error: str
+    validated_data: dict  # StatementData as a dict, dates normalised
+    statement_month: str  # YYYY-MM, derived from statement_date
+    llm_calls: list       # one usage dict per model call
+    error: str            # human-readable reason the job stopped
+    error_code: str       # ErrorCode value

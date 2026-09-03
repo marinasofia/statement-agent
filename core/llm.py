@@ -1,61 +1,94 @@
-import anthropic
-import os
+"""Thin wrapper around the Anthropic Messages API.
+
+The API is asked for a JSON object that conforms to a schema (structured
+outputs), so the model cannot return markdown fences, prose, or a shape
+that does not match. What the API cannot guarantee is that the values are
+true or that the output was not cut off, so the wrapper returns the raw
+text together with stop_reason and token usage and leaves validation to
+the caller.
+
+Retries for 429, 5xx and connection errors are handled by the SDK client
+(max_retries). There is deliberately no second retry layer here.
+"""
+
 import logging
-import re
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from core.config import CLAUDE_MODEL, CLAUDE_MAX_TOKENS, CLAUDE_MAX_RETRIES, CLAUDE_RETRY_MIN_WAIT, CLAUDE_RETRY_MAX_WAIT
+import os
+from dataclasses import dataclass
+
+import anthropic
+from anthropic import transform_schema
+from pydantic import BaseModel
+
+from core.config import CLAUDE_MODEL, CLAUDE_MAX_TOKENS, CLAUDE_MAX_RETRIES
 
 logger = logging.getLogger(__name__)
 
 _client = None
 
+
 def get_client() -> anthropic.Anthropic:
     global _client
     if _client is None:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
+        if not os.getenv("ANTHROPIC_API_KEY"):
             raise ValueError("ANTHROPIC_API_KEY is not set (environment or .env)")
-        _client = anthropic.Anthropic(api_key=api_key)
+        _client = anthropic.Anthropic(max_retries=CLAUDE_MAX_RETRIES)
     return _client
 
-@retry(
-    retry=retry_if_exception_type((anthropic.APIStatusError, anthropic.APIConnectionError)),
-    stop=stop_after_attempt(CLAUDE_MAX_RETRIES),
-    wait=wait_exponential(multiplier=1, min=CLAUDE_RETRY_MIN_WAIT, max=CLAUDE_RETRY_MAX_WAIT),
-    reraise=True
-)
-def call_claude(system_prompt: str, user_message: str, max_tokens: int = CLAUDE_MAX_TOKENS) -> str:
-    try:
-        client = get_client()
-        logger.info(f"Calling Claude ({len(user_message)} chars)")
 
-        message = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=max_tokens,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}]
-        )
+@dataclass
+class LLMResult:
+    text: str
+    stop_reason: str
+    model: str
+    input_tokens: int
+    output_tokens: int
 
-        if not message.content:
-            raise ValueError("Claude returned empty response")
+    @property
+    def truncated(self) -> bool:
+        return self.stop_reason == "max_tokens"
 
-        return message.content[0].text
+    @property
+    def refused(self) -> bool:
+        return self.stop_reason == "refusal"
 
-    except anthropic.APIStatusError as e:
-        logger.warning(f"Claude API status error (will retry): {e.status_code} — {e.message}")
-        raise
-    except anthropic.APIConnectionError as e:
-        logger.warning(f"Claude connection error (will retry): {e}")
-        raise
-    except anthropic.APIError as e:
-        logger.error(f"Claude API error (will not retry): {e}")
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise
+    def usage(self) -> dict:
+        return {
+            "model": self.model,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "stop_reason": self.stop_reason,
+        }
 
-def clean_json_response(text: str) -> str:
-    text = text.strip()
-    text = re.sub(r'```(?:json)?\s*\n?', '', text)
-    text = re.sub(r'\n?```\s*$', '', text)
-    return text.strip()
+
+def extract_structured(
+    system_prompt: str,
+    user_message: str,
+    output_model: type[BaseModel],
+    model: str = CLAUDE_MODEL,
+    max_tokens: int = CLAUDE_MAX_TOKENS,
+) -> LLMResult:
+    """Ask the model for JSON matching output_model's schema.
+
+    Raises anthropic.APIError subclasses on transport or API failure after
+    the SDK's own retries are exhausted. Never raises on truncation or
+    refusal; the caller decides what those mean.
+    """
+    client = get_client()
+    logger.info("Calling %s (%d chars in)", model, len(user_message))
+
+    response = client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_message}],
+        output_config={"format": {"type": "json_schema", "schema": transform_schema(output_model)}},
+    )
+
+    text = "".join(block.text for block in response.content if block.type == "text")
+    return LLMResult(
+        text=text,
+        stop_reason=response.stop_reason or "unknown",
+        model=response.model,
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
+    )
