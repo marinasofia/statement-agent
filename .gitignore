@@ -8,3 +8,4 @@ uploads/
 ~$*.xlsx
 *.xlsx
 .venv/
+*.egg-info/
