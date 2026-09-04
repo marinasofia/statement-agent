@@ -5,6 +5,11 @@ from typing import List, Optional, TypedDict
 from pydantic import BaseModel, field_validator
 
 
+class Status(StrEnum):
+    OK = "OK"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
 class ErrorCode(StrEnum):
     """Machine-readable reason a job stopped. `error` carries the human text."""
     NO_FILE_PATH = "NO_FILE_PATH"
@@ -55,8 +60,11 @@ class StatementDraft(BaseModel):
     that sees the source text."""
     account_holder: str
     closing_balance: float
+    opening_balance: Optional[float] = None
     account_number: Optional[str] = None
     statement_date: Optional[str] = None
+    statement_period_start: Optional[str] = None
+    statement_period_end: Optional[str] = None
     currency: Optional[str] = None
     bank_name: Optional[str] = None
     transactions: Optional[List[TransactionDraft]] = None
@@ -73,9 +81,9 @@ class StatementData(StatementDraft):
     """Validated statement. Dates are normalised to ISO on the way through."""
     transactions: Optional[List[Transaction]] = None
 
-    @field_validator("statement_date")
+    @field_validator("statement_date", "statement_period_start", "statement_period_end")
     @classmethod
-    def validate_statement_date(cls, v: Optional[str]) -> Optional[str]:
+    def validate_dates(cls, v: Optional[str]) -> Optional[str]:
         return normalise_date(v)
 
     @field_validator("currency")
@@ -97,6 +105,11 @@ class AgentState(TypedDict, total=False):
     raw_text: str
     validated_data: dict  # StatementData as a dict, dates normalised
     statement_month: str  # YYYY-MM, derived from statement_date
+    reconciliation: dict  # ReconciliationResult.as_dict()
+    status: str           # "OK" or "NEEDS_REVIEW" once reconciled
+    review_reasons: list  # failed checks, human-readable
+    escalated: bool       # a stronger model was tried after reconciliation failed
+    escalation_error: str # why the stronger model's attempt failed, if it did
     llm_calls: list       # one usage dict per model call
     error: str            # human-readable reason the job stopped
     error_code: str       # ErrorCode value
