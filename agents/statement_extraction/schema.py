@@ -1,8 +1,8 @@
-from enum import StrEnum
 from datetime import datetime
-from typing import List, Optional, TypedDict
+from enum import StrEnum
+from typing import Any, List, Optional, TypedDict
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, FiniteFloat, field_validator
 
 
 class Status(StrEnum):
@@ -12,6 +12,7 @@ class Status(StrEnum):
 
 class ErrorCode(StrEnum):
     """Machine-readable reason a job stopped. `error` carries the human text."""
+
     NO_FILE_PATH = "NO_FILE_PATH"
     NOT_PDF = "NOT_PDF"
     OUTSIDE_UPLOAD_DIR = "OUTSIDE_UPLOAD_DIR"
@@ -58,6 +59,7 @@ class StatementDraft(BaseModel):
     """The shape requested from the model. Schema only, no semantic checks,
     because the API enforces this shape and semantic failures need a retry
     that sees the source text."""
+
     account_holder: str
     closing_balance: float
     opening_balance: Optional[float] = None
@@ -71,6 +73,15 @@ class StatementDraft(BaseModel):
 
 
 class Transaction(TransactionDraft):
+    amount: FiniteFloat
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def reject_boolean_amount(cls, value: Any) -> Any:
+        if isinstance(value, bool):
+            raise ValueError("amount must be a finite number, not a boolean")
+        return value
+
     @field_validator("date")
     @classmethod
     def validate_date(cls, v: Optional[str]) -> Optional[str]:
@@ -79,7 +90,17 @@ class Transaction(TransactionDraft):
 
 class StatementData(StatementDraft):
     """Validated statement. Dates are normalised to ISO on the way through."""
+
     transactions: Optional[List[Transaction]] = None
+    closing_balance: FiniteFloat
+    opening_balance: Optional[FiniteFloat] = None
+
+    @field_validator("closing_balance", "opening_balance", mode="before")
+    @classmethod
+    def reject_boolean_balance(cls, value: Any) -> Any:
+        if isinstance(value, bool):
+            raise ValueError("balance must be a finite number, not a boolean")
+        return value
 
     @field_validator("statement_date", "statement_period_start", "statement_period_end")
     @classmethod
@@ -101,15 +122,15 @@ class AgentState(TypedDict, total=False):
     file_path: str
     job_id: str
     client_id: str
-    format_id: str        # chosen by detect_format from the format library
+    format_id: str  # chosen by detect_format from the format library
     raw_text: str
     validated_data: dict  # StatementData as a dict, dates normalised
     statement_month: str  # YYYY-MM, derived from statement_date
     reconciliation: dict  # ReconciliationResult.as_dict()
-    status: str           # "OK" or "NEEDS_REVIEW" once reconciled
+    status: str  # "OK" or "NEEDS_REVIEW" once reconciled
     review_reasons: list  # failed checks, human-readable
-    escalated: bool       # a stronger model was tried after reconciliation failed
-    escalation_error: str # why the stronger model's attempt failed, if it did
-    llm_calls: list       # one usage dict per model call
-    error: str            # human-readable reason the job stopped
-    error_code: str       # ErrorCode value
+    escalated: bool  # a stronger model was tried after reconciliation failed
+    escalation_error: str  # why the stronger model's attempt failed, if it did
+    llm_calls: list  # one usage dict per model call
+    error: str  # human-readable reason the job stopped
+    error_code: str  # ErrorCode value

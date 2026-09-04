@@ -106,7 +106,7 @@ Haiku 4.5 does the first pass because a statement is a reading task, not a reaso
 
 **Path traversal.** File paths are resolved to real paths and checked for containment in the upload directory before existence is tested. Errors never echo the supplied path.
 
-**Untrusted content.** Document text and model output are untrusted. Structured output and the injection fixture test specific behaviors; they do not guarantee safe spreadsheet output or correctness for arbitrary documents. Keep use limited to trusted evaluation inputs until the output contracts and deployment controls have been reviewed. See [SECURITY.md](SECURITY.md).
+**Untrusted content.** Document text and model output are untrusted. New workbook cells store strings as literal text, including formula prefixes and spreadsheet error tokens. Semantic validation rejects nonfinite and boolean money values. These controls do not prove extracted facts or sanitize pre-existing workbook content. See the [output contracts](docs/output-contracts.md) and [SECURITY.md](SECURITY.md).
 
 **Invisible characters.** Zero-width and bidirectional control characters are stripped before the text reaches the model or the spreadsheet.
 
@@ -157,6 +157,11 @@ Python 3.12, LangGraph, Anthropic SDK with structured outputs, Pydantic v2, pdfp
 MVP for controlled batch evaluation. CI runs tests and replay evaluations;
 coverage, lint, and static-type gates are not yet enforced. Phase 0 measured
 81.7% line-plus-branch coverage across the application, including its CLI.
+
+Workbook saves now use an atomic replacement, and output failures retain a
+separate extraction log when its destination is writable. Empty and all-failed
+batches can produce a valid summary workbook. Batch exit status is nonzero if
+any extraction, workbook export, or run-log write fails.
 
 TODO: complete the [package, failure-path, and CI follow-up](https://github.com/marinasofia/statement-agent/issues/8).
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development and debugging,
