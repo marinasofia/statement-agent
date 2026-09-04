@@ -2,7 +2,34 @@
 
 Turns PDF bank statements into a reconciled Excel workbook. Built for the situation where statements arrive from many banks in inconsistent layouts, someone has to key the balances into a spreadsheet, and a wrong number costs more than a slow one.
 
-The decision that shapes everything else: the model is trusted to read, never to be right. Every number it returns is checked by arithmetic before it reaches the output. Anything that does not reconcile goes to a review sheet with the reason attached instead of quietly into the main table.
+The model extracts data; deterministic checks then compare balances, transactions,
+and dates when the statement provides enough information. A skipped check is
+not proof of correctness, and the current status model does not distinguish
+every unverified case. Review the output before using it for reconciliation.
+
+[![CI](https://github.com/marinasofia/statement-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/marinasofia/statement-agent/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+
+## Quickstart without an API key
+
+Requires Python 3.12 or newer. Commands use a POSIX shell and run from the checkout.
+The replay exercises synthetic statements and recorded model responses.
+
+```bash
+git clone https://github.com/marinasofia/statement-agent.git
+cd statement-agent
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[dev]"
+mkdir -p outputs
+.venv/bin/python -m evals.run_evals --mode replay --out outputs/eval-replay.json
+.venv/bin/python -m pytest -q
+```
+
+Expect 11 passing replay cases. Replay costs and timings come from recordings,
+not new API calls or a benchmark of your computer. An installed wheel currently
+omits required configuration, so use this source-checkout setup.
+
 
 ## What to look at first
 
@@ -69,7 +96,7 @@ Dates: the prompt asks for ISO 8601 and the validator normalises month-name form
 | Same account, statement date and closing balance already in the workbook | skipped and counted | status `DUPLICATE` |
 | API 429, 5xx, or connection error | SDK retries with backoff, then fails | `API_ERROR` |
 
-Every job writes one line to `outputs/run_<timestamp>.jsonl` with status, error code, model whose output was accepted, tokens in and out, estimated cost, latency, and reconciliation delta. It contains file names and ids only, never statement content. The batch summary prints counts by status, total spend, and p50/p95 latency.
+The batch runner records status, error code, accepted model, tokens, estimated cost, latency, and reconciliation delta in a JSONL job report after workbook output. Failed workbook writes can currently prevent that report. Logs and reports may include filenames, reconciliation amounts, and error context; treat them as sensitive. The batch summary prints status counts, estimated spend, and latency statistics.
 
 ## Cost and model choice
 
@@ -79,11 +106,11 @@ Haiku 4.5 does the first pass because a statement is a reading task, not a reaso
 
 **Path traversal.** File paths are resolved to real paths and checked for containment in the upload directory before existence is tested. Errors never echo the supplied path.
 
-**Prompt injection.** The real protection is structural: model output is a typed object that is only ever written to a spreadsheet. It is never executed and never used to choose the next action. The system prompt also tells the model to treat document text as data, and the eval set includes a transaction description that says "ignore all previous instructions"; the extracted values must be unaffected, and they are.
+**Untrusted content.** Document text and model output are untrusted. Structured output and the injection fixture test specific behaviors; they do not guarantee safe spreadsheet output or correctness for arbitrary documents. Keep use limited to trusted evaluation inputs until the output contracts and deployment controls have been reviewed. See [SECURITY.md](SECURITY.md).
 
 **Invisible characters.** Zero-width and bidirectional control characters are stripped before the text reaches the model or the spreadsheet.
 
-**PII.** Statement text, including names and account numbers, is sent to the Anthropic API. Logs and the run record contain job ids and file names only; per-file account details print only with `--verbose`. Account numbers could be masked deterministically before the call and restored from the regex match afterwards. That is not built, because whether it is needed depends on the customer's data agreement, and it should be decided there rather than assumed here.
+**PII.** Statement text, including names and account numbers, is sent to the Anthropic API. Logs and run records can include identifying filenames, amounts, and error context; `--verbose` also prints per-file account details. Account numbers could be masked deterministically before the call and restored from the regex match afterwards. That is not built, because whether it is needed depends on the customer's data agreement, and it should be decided there rather than assumed here.
 
 ## Multi-client configuration
 
@@ -91,25 +118,30 @@ Haiku 4.5 does the first pass because a statement is a reading task, not a reaso
 
 ## Setup and usage
 
-```bash
-git clone https://github.com/marinasofia/statement-agent.git
-cd statement-agent
-uv venv --python 3.12 .venv && source .venv/bin/activate
-uv pip install -e ".[dev]"
-cp .env.example .env         # add ANTHROPIC_API_KEY
-```
+After the offline quickstart, copy `.env.example` to `.env` and set a valid
+`ANTHROPIC_API_KEY` for an explicitly authorized live run. Place only documents
+you are permitted to send to Anthropic in `uploads/`. Live evaluation and
+recording also send fixture text and incur charges.
 
 ```bash
-python run_batch.py                                   # uploads/ to outputs/statements_batch.xlsx
-python run_batch.py --input statements/ --output out/aug.xlsx --month 2026-08 --workers 3
-python run_batch.py --verbose                         # print account holder and balance per file
-make test                                             # 66 unit tests
-make eval                                             # eval suite, replayed responses, no key
-make eval-live                                        # eval suite against the API
-make eval-record                                      # re-record after changing the prompt or schema
+cp .env.example .env
+mkdir -p uploads outputs
+# Edit .env and put authorized text-based PDF statements in uploads/ first.
+.venv/bin/python run_batch.py --input uploads/ --output outputs/aug.xlsx --workers 3
 ```
 
-Environment variables: `ANTHROPIC_API_KEY`, and optionally `CLAUDE_MODEL`, `ESCALATION_MODEL` (empty string disables escalation), `CLAUDE_MAX_TOKENS`, `MAX_INPUT_CHARS`, `MAX_FILE_SIZE_MB`, `UPLOAD_DIR`, `EXCEL_OUTPUT_PATH`, `CLIENT_ID`.
+For another input directory, set `UPLOAD_DIR` before starting Python as well
+as `--input`; file validation uses the configured upload root. Keep an output
+directory component, such as `outputs/report.xlsx`, until bare-filename support
+is fixed. `--month` is only a fallback when the extracted date provides no month.
+
+Environment variables: `ANTHROPIC_API_KEY`, `CLAUDE_MODEL`, `ESCALATION_MODEL`
+(empty disables escalation), `CLAUDE_MAX_TOKENS`, `MAX_INPUT_CHARS`,
+`MAX_FILE_SIZE_MB`, `UPLOAD_DIR`, `EXCEL_OUTPUT_PATH`, and `CLIENT_ID`.
+Defaults are in [`.env.example`](.env.example) and [core/config.py](core/config.py).
+Relative environment paths resolve against the process working directory;
+unset defaults are anchored to the project. Model availability depends on the
+provider account. No API key is needed for the replay quickstart or tests.
 
 ## Out of scope, on purpose
 
@@ -118,3 +150,19 @@ OCR for scanned statements. Formats beyond the ones in `formats_library`. A web 
 ## Stack
 
 Python 3.12, LangGraph, Anthropic SDK with structured outputs, Pydantic v2, pdfplumber, openpyxl, pytest, reportlab for fixtures.
+
+
+## Development and status
+
+MVP for controlled batch evaluation. CI runs tests and replay evaluations;
+coverage, lint, and static-type gates are not yet enforced. Phase 0 measured
+81.7% line-plus-branch coverage across the application, including its CLI.
+
+TODO: complete the [package, failure-path, and CI follow-up](https://github.com/marinasofia/statement-agent/issues/8).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and debugging,
+[maintainer guidance](docs/maintenance.md) for branch rules,
+[CHANGELOG.md](CHANGELOG.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## License
+
+[MIT](LICENSE). Synthetic fixtures are for testing, not real account records.
