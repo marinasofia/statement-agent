@@ -14,7 +14,22 @@ accounts owned by one person, and keying on displayed columns would make
 dedup depend on layout.
 """
 
+import logging
+import math
+import os
+import tempfile
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
+
+from openpyxl import Workbook, load_workbook
+from openpyxl.cell import Cell
+from openpyxl.worksheet.worksheet import Worksheet
+
+from core.client_config import load_format_config
+
 REVIEW_SHEET = "Needs review"
+SUMMARY_SHEET = "Run summary"
 REVIEW_EXTRA_HEADERS = ["Reasons", "Balance delta", "Source file"]
 ROW_KEY_HEADER = "Row key"
 
@@ -33,14 +48,35 @@ def row_key(data: dict) -> str:
     closing_text = f"{closing:.2f}" if isinstance(closing, (int, float)) else ""
     return f"{account}|{data.get('statement_date') or ''}|{closing_text}"
 
-import logging
-import os
-
-from openpyxl import Workbook, load_workbook
-
-from core.client_config import load_format_config
 
 logger = logging.getLogger(__name__)
+
+
+def _append_literal_row(sheet: Worksheet, values: Sequence[Any]) -> None:
+    """Store text as text, including formula prefixes and spreadsheet error tokens."""
+    cells = []
+    for value in values:
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("Workbook numeric values must be finite")
+        cell = Cell(sheet, value=value)
+        if isinstance(value, str):
+            cell.data_type = "s"
+        cells.append(cell)
+    sheet.append(cells)
+
+
+def _save_atomic(workbook: Workbook, target: Path) -> None:
+    """Replace the destination only after a complete workbook has been written."""
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{target.stem}-", suffix=".xlsx", dir=target.parent
+    )
+    os.close(descriptor)
+    temporary = Path(name)
+    try:
+        workbook.save(temporary)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _existing_keys(ws):
@@ -74,7 +110,8 @@ def write_workbook(results, output_path, client_id, fallback_month=None):
     """
     counts = {"ok": 0, "needs_review": 0, "duplicate": 0, "failed": 0}
     workbook_dirty = False
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    target = Path(output_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
 
     if os.path.exists(output_path):
         wb = load_workbook(output_path)
@@ -82,63 +119,100 @@ def write_workbook(results, output_path, client_id, fallback_month=None):
         wb = Workbook()
         wb.remove(wb.active)
 
-    keys_by_sheet = {}
-    columns_by_sheet = {}
+    try:
+        keys_by_sheet = {}
+        columns_by_sheet = {}
 
-    for result in results:
-        if result.get("error"):
-            counts["failed"] += 1
-            continue
+        for result in results:
+            if result.get("error"):
+                counts["failed"] += 1
+                continue
 
-        config = load_format_config(client_id, result.get("format_id") or "default")
-        columns = config["excel_output"]["columns"]
-        label_by_name = {f["name"]: f.get("label", f["name"]) for f in config["fields"]}
-        headers = [label_by_name.get(col, col) for col in columns]
+            config = load_format_config(client_id, result.get("format_id") or "default")
+            columns = config["excel_output"]["columns"]
+            label_by_name = {
+                f["name"]: f.get("label", f["name"]) for f in config["fields"]
+            }
+            headers = [label_by_name.get(col, col) for col in columns]
 
-        data = result.get("validated_data", {})
-        needs_review = result.get("status") == "NEEDS_REVIEW"
-        if needs_review:
-            sheet = REVIEW_SHEET
-            headers = headers + REVIEW_EXTRA_HEADERS
-        else:
-            sheet = result.get("statement_month") or fallback_month or "Unsorted"
-        headers = headers + [ROW_KEY_HEADER]
+            data = result.get("validated_data", {})
+            needs_review = result.get("status") == "NEEDS_REVIEW"
+            if needs_review:
+                sheet = REVIEW_SHEET
+                headers = headers + REVIEW_EXTRA_HEADERS
+            else:
+                sheet = result.get("statement_month") or fallback_month or "Unsorted"
+            headers = headers + [ROW_KEY_HEADER]
 
-        if sheet not in wb.sheetnames:
-            ws = wb.create_sheet(title=sheet)
-            ws.append(headers)
-            ws.freeze_panes = "A2"
-            _hide_row_key(ws, len(headers))
-            keys_by_sheet[sheet] = set()
-        else:
-            ws = wb[sheet]
-            keys_by_sheet.setdefault(sheet, _existing_keys(ws))
-        columns_by_sheet[sheet] = (columns, label_by_name)
+            if sheet not in wb.sheetnames:
+                ws = wb.create_sheet(title=sheet)
+                _append_literal_row(ws, headers)
+                ws.freeze_panes = "A2"
+                _hide_row_key(ws, len(headers))
+                keys_by_sheet[sheet] = set()
+            else:
+                ws = wb[sheet]
+                if [cell.value for cell in ws[1]] != headers:
+                    raise ValueError(
+                        f"Existing worksheet {sheet!r} has incompatible columns"
+                    )
+                keys_by_sheet.setdefault(sheet, _existing_keys(ws))
+            columns_by_sheet[sheet] = (columns, label_by_name)
 
-        key = row_key(data)
-        if key in keys_by_sheet[sheet]:
-            counts["duplicate"] += 1
-            result["duplicate"] = True
-            logger.info("Skipping duplicate row in %s", sheet)
-            continue
+            key = row_key(data)
+            if key in keys_by_sheet[sheet]:
+                counts["duplicate"] += 1
+                result["duplicate"] = True
+                logger.info("Skipping duplicate row in %s", sheet)
+                continue
 
-        row = [data.get(col) for col in columns]
-        if needs_review:
-            delta = (result.get("reconciliation") or {}).get("balance_delta")
-            row += ["; ".join(result.get("review_reasons") or []), delta,
-                    os.path.basename(result.get("file_path") or "")]
-            counts["needs_review"] += 1
-        else:
-            counts["ok"] += 1
-        row.append(key)
-        ws.append(row)
-        keys_by_sheet[sheet].add(key)
-        workbook_dirty = True
+            row = [data.get(col) for col in columns]
+            if needs_review:
+                delta = (result.get("reconciliation") or {}).get("balance_delta")
+                row += [
+                    "; ".join(result.get("review_reasons") or []),
+                    delta,
+                    os.path.basename(result.get("file_path") or ""),
+                ]
+                counts["needs_review"] += 1
+            else:
+                counts["ok"] += 1
+            row.append(key)
+            _append_literal_row(ws, row)
+            keys_by_sheet[sheet].add(key)
+            workbook_dirty = True
 
-    for sheet, (columns, label_by_name) in columns_by_sheet.items():
-        extra = REVIEW_EXTRA_HEADERS if sheet == REVIEW_SHEET else []
-        _autofit(wb[sheet], columns + extra, label_by_name)
+        for sheet, (columns, label_by_name) in columns_by_sheet.items():
+            extra = REVIEW_EXTRA_HEADERS if sheet == REVIEW_SHEET else []
+            _autofit(wb[sheet], columns + extra, label_by_name)
 
-    if workbook_dirty or not os.path.exists(output_path):
-        wb.save(output_path)
+        summary_sheet = wb[SUMMARY_SHEET] if SUMMARY_SHEET in wb else None
+        summary_rows = list(summary_sheet.values) if summary_sheet is not None else []
+        owned_summary = (
+            len(summary_rows) == len(counts) + 1
+            and summary_rows[0] == ("Outcome", "Count")
+            and all(
+                len(row) == 2 and row[0] == key and type(row[1]) is int
+                for row, key in zip(summary_rows[1:], counts)
+            )
+        )
+        if not wb.sheetnames or (wb.sheetnames == [SUMMARY_SHEET] and owned_summary):
+            ws = (
+                summary_sheet
+                if summary_sheet is not None
+                else wb.create_sheet(SUMMARY_SHEET)
+            )
+            ws.delete_rows(1, ws.max_row)
+            _append_literal_row(ws, ["Outcome", "Count"])
+            for outcome, count in counts.items():
+                _append_literal_row(ws, [outcome, count])
+            workbook_dirty = True
+        elif owned_summary:
+            wb.remove(summary_sheet)
+            workbook_dirty = True
+
+        if workbook_dirty or not target.exists():
+            _save_atomic(wb, target)
+    finally:
+        wb.close()
     return counts

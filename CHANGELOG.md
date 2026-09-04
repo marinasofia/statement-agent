@@ -5,6 +5,11 @@ development branch; they do not imply a published package or deployed site.
 
 ## Unreleased
 
+### Fixed
+
+- Write literal spreadsheet text and finite amounts, preserve existing workbooks on save failures, and reject incompatible append layouts.
+- Retain run logs on export failure and return a nonzero batch status for failed output or extraction.
+
 ### Added
 
 - Contributor, conduct, and private security-reporting policies.
