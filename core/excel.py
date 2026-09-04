@@ -1,14 +1,37 @@
 """Excel workbook writer for batch results.
 
 One writer, used by run_batch. Reconciled rows are grouped into one sheet
-per statement month and deduplicated on (account_holder, account_number)
-within a sheet, including rows already present from an earlier run. Rows
-that did not reconcile go to a "Needs review" sheet with the reasons and
-the balance delta, so a reviewer sees them instead of losing them.
+per statement month. Rows that did not reconcile go to a "Needs review"
+sheet with the reasons and the balance delta, so a reviewer sees them
+instead of losing them.
+
+Deduplication: a statement is the same statement when it is for the same
+account, the same statement date, and the same closing balance. That key
+is written to a hidden "Row key" column on every sheet, so a later run
+can dedup against rows already on disk no matter which columns a client
+chose to display. Keying on the account holder alone would merge two
+accounts owned by one person, and keying on displayed columns would make
+dedup depend on layout.
 """
 
 REVIEW_SHEET = "Needs review"
 REVIEW_EXTRA_HEADERS = ["Reasons", "Balance delta", "Source file"]
+ROW_KEY_HEADER = "Row key"
+
+
+def _fold(value) -> str:
+    return " ".join(str(value or "").casefold().split())
+
+
+def _digits(value) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isalnum()).casefold()
+
+
+def row_key(data: dict) -> str:
+    account = _digits(data.get("account_number")) or _fold(data.get("account_holder"))
+    closing = data.get("closing_balance")
+    closing_text = f"{closing:.2f}" if isinstance(closing, (int, float)) else ""
+    return f"{account}|{data.get('statement_date') or ''}|{closing_text}"
 
 import logging
 import os
@@ -20,16 +43,17 @@ from core.client_config import load_format_config
 logger = logging.getLogger(__name__)
 
 
-def _existing_keys(ws, columns):
-    ah_idx = columns.index("account_holder") if "account_holder" in columns else None
-    an_idx = columns.index("account_number") if "account_number" in columns else None
-    keys = set()
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        holder = row[ah_idx] if ah_idx is not None else None
-        number = row[an_idx] if an_idx is not None else None
-        if holder:
-            keys.add((holder, number))
-    return keys
+def _existing_keys(ws):
+    header = [c.value for c in ws[1]]
+    if ROW_KEY_HEADER not in header:
+        return set()
+    idx = header.index(ROW_KEY_HEADER)
+    return {row[idx] for row in ws.iter_rows(min_row=2, values_only=True) if row[idx]}
+
+
+def _hide_row_key(ws, header_count):
+    letter = ws.cell(row=1, column=header_count).column_letter
+    ws.column_dimensions[letter].hidden = True
 
 
 def _autofit(ws, columns, label_by_name):
@@ -78,21 +102,20 @@ def write_workbook(results, output_path, client_id, fallback_month=None):
             headers = headers + REVIEW_EXTRA_HEADERS
         else:
             sheet = result.get("statement_month") or fallback_month or "Unsorted"
+        headers = headers + [ROW_KEY_HEADER]
 
         if sheet not in wb.sheetnames:
             ws = wb.create_sheet(title=sheet)
             ws.append(headers)
             ws.freeze_panes = "A2"
+            _hide_row_key(ws, len(headers))
             keys_by_sheet[sheet] = set()
         else:
             ws = wb[sheet]
-            keys_by_sheet.setdefault(sheet, _existing_keys(ws, columns))
+            keys_by_sheet.setdefault(sheet, _existing_keys(ws))
         columns_by_sheet[sheet] = (columns, label_by_name)
 
-        # The key must be recoverable from the sheet on the next run, so it
-        # only uses account_number when that column is actually written.
-        number = data.get("account_number") if "account_number" in columns else None
-        key = (data.get("account_holder"), number)
+        key = row_key(data)
         if key in keys_by_sheet[sheet]:
             counts["duplicate"] += 1
             result["duplicate"] = True
@@ -107,6 +130,7 @@ def write_workbook(results, output_path, client_id, fallback_month=None):
             counts["needs_review"] += 1
         else:
             counts["ok"] += 1
+        row.append(key)
         ws.append(row)
         keys_by_sheet[sheet].add(key)
         workbook_dirty = True
