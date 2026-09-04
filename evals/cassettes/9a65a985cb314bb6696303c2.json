@@ -1,0 +1,8 @@
+{
+  "text": "{\"account_holder\":\"Maria Gonzalez\",\"closing_balance\":3987.90,\"opening_balance\":2300.00,\"account_number\":\"512004477\",\"statement_date\":\"2026-08-31\",\"statement_period_start\":\"2026-08-01\",\"statement_period_end\":\"2026-08-31\",\"currency\":\"USD\",\"bank_name\":\"First Prairie Bank\",\"transactions\":[{\"date\":\"2026-08-03\",\"description\":\"Pharmacy\",\"amount\":-22.10},{\"date\":\"2026-08-14\",\"description\":\"Payroll\",\"amount\":1850.00},{\"date\":\"2026-08-27\",\"description\":\"Insurance\",\"amount\":-140.00}]}",
+  "stop_reason": "end_turn",
+  "model": "claude-haiku-4-5-20251001",
+  "input_tokens": 1515,
+  "output_tokens": 159,
+  "latency_ms": 1432
+}

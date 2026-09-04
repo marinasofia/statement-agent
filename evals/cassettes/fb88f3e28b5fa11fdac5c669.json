@@ -1,0 +1,8 @@
+{
+  "text": "{\"account_holder\":\"Lukas Meier\",\"closing_balance\":14329.50,\"opening_balance\":10250.00,\"account_number\":\"CH93 0076 2011 6238 5295 7\",\"statement_date\":\"2026-08-31\",\"statement_period_start\":\"2026-08-01\",\"statement_period_end\":\"2026-08-31\",\"currency\":\"CHF\",\"bank_name\":\"Alpenbank AG\",\"transactions\":[{\"date\":\"2026-08-01\",\"description\":\"Miete August\",\"amount\":-1900.00},{\"date\":\"2026-08-10\",\"description\":\"Lohn\",\"amount\":6400.00},{\"date\":\"2026-08-18\",\"description\":\"Krankenkasse\",\"amount\":-420.50}]}",
+  "stop_reason": "end_turn",
+  "model": "claude-haiku-4-5-20251001",
+  "input_tokens": 1537,
+  "output_tokens": 183,
+  "latency_ms": 1681
+}

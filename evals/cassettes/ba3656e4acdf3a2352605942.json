@@ -1,0 +1,8 @@
+{
+  "text": "{\"account_holder\":\"Alex Morgan\",\"closing_balance\":3899.00,\"opening_balance\":1250.00,\"account_number\":\"4401 2299 0031\",\"statement_date\":\"2026-08-31\",\"statement_period_start\":\"2026-08-01\",\"statement_period_end\":\"2026-08-31\",\"currency\":\"USD\",\"bank_name\":\"Northwind Bank\",\"transactions\":[{\"date\":\"2026-08-02\",\"description\":\"Grocery Market\",\"amount\":-54.20},{\"date\":\"2026-08-05\",\"description\":\"Salary Northwind Ltd\",\"amount\":3200.00},{\"date\":\"2026-08-11\",\"description\":\"Electric utility\",\"amount\":-88.15},{\"date\":\"2026-08-19\",\"description\":\"Card payment\",\"amount\":-410.00},{\"date\":\"2026-08-28\",\"description\":\"Interest credit\",\"amount\":1.35}]}",
+  "stop_reason": "end_turn",
+  "model": "claude-haiku-4-5-20251001",
+  "input_tokens": 1548,
+  "output_tokens": 210,
+  "latency_ms": 1665
+}

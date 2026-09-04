@@ -1,0 +1,8 @@
+{
+  "text": "{\"account_holder\":\"Riley Chen\",\"closing_balance\":9000.00,\"opening_balance\":9000.00,\"account_number\":\"88-2201-5\",\"statement_date\":\"2026-08-31\",\"statement_period_start\":\"2026-08-01\",\"statement_period_end\":\"2026-08-31\",\"currency\":\"USD\",\"bank_name\":\"Summit Savings\",\"transactions\":null}",
+  "stop_reason": "end_turn",
+  "model": "claude-haiku-4-5-20251001",
+  "input_tokens": 1471,
+  "output_tokens": 93,
+  "latency_ms": 1221
+}

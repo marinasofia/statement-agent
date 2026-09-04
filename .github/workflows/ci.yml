@@ -15,3 +15,5 @@ jobs:
           python-version: "3.12"
       - run: uv pip install -e ".[dev]"
       - run: uv run --no-sync python -m pytest -q
+      - name: Evals (replayed model responses, no API key)
+        run: uv run --no-sync python -m evals.run_evals --mode replay
