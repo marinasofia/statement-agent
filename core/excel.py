@@ -95,6 +95,7 @@ def write_workbook(results, output_path, client_id, fallback_month=None):
         key = (data.get("account_holder"), number)
         if key in keys_by_sheet[sheet]:
             counts["duplicate"] += 1
+            result["duplicate"] = True
             logger.info("Skipping duplicate row in %s", sheet)
             continue
 
