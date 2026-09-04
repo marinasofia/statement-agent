@@ -67,19 +67,23 @@ def main(argv=None):
             completed += 1
             pdf_name = os.path.basename(futures[future])
             if result.get("error"):
-                print(f"[{completed}/{len(pdf_files)}] FAILED  {pdf_name}: {result.get('error')}")
+                print(f"[{completed}/{len(pdf_files)}] FAILED        {pdf_name}: {result.get('error')}")
+            elif result.get("status") == "NEEDS_REVIEW":
+                print(f"[{completed}/{len(pdf_files)}] NEEDS REVIEW  {pdf_name}: {'; '.join(result.get('review_reasons') or [])}")
             else:
                 data = result.get("validated_data", {})
-                print(f"[{completed}/{len(pdf_files)}] OK      {pdf_name}: {data.get('account_holder')} | {data.get('closing_balance')}")
+                tag = " (escalated)" if result.get("escalated") else ""
+                print(f"[{completed}/{len(pdf_files)}] OK{tag:<12}{pdf_name}: {data.get('account_holder')} | {data.get('closing_balance')}")
 
     # No interactive prompt: an unattended run must never block on stdin.
     # Rows without a parseable date go to --month if given, else "Unsorted".
-    success, skipped, failed = write_workbook(results, args.output, get_client_id(), args.month)
+    counts = write_workbook(results, args.output, get_client_id(), args.month)
 
     print(f"\nDone. Output: {args.output}")
-    print(f"  Written:   {success}")
-    print(f"  Skipped:   {skipped} (duplicates)")
-    print(f"  Failed:    {failed}")
+    print(f"  Reconciled:    {counts['ok']}")
+    print(f"  Needs review:  {counts['needs_review']} (on the '{'Needs review'}' sheet)")
+    print(f"  Duplicates:    {counts['duplicate']}")
+    print(f"  Failed:        {counts['failed']}")
 
 if __name__ == "__main__":
     main()

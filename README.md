@@ -4,13 +4,17 @@ An agentic pipeline that turns PDF bank statements into validated, structured Ex
 
 ## How it works
 
-The agent is a 5 node LangGraph StateGraph. Each PDF flows through the nodes in sequence, with conditional routing that skips to the end on any error:
+The agent is a LangGraph StateGraph. Each PDF flows through the nodes in sequence, with conditional routing that skips to the end on any error:
 
 1. **Validate file** — confirms the input is a PDF, exists, falls within the allowed directory, and is under the size limit
 2. **Extract text** — pulls the text layer via pdfplumber and strips invisible characters; image-only PDFs stop here
 3. **Detect format** — matches detection signatures from the format library against the text and picks the best match, falling back to the default format
 4. **Extract fields** — the only model call. Claude returns a JSON object whose shape is enforced by the API (structured outputs). The node checks the two things the API cannot: that the output was not truncated, and that the values pass the semantic validators (ISO dates, ISO 4217 currency). A validation failure gets one retry that re-runs extraction from the source text with the error appended
-5. **Finalize** — derives the statement month from the validated date. No model call
+5. **Reconcile** — deterministic checks on what the model returned: opening balance plus the sum of transactions must equal the closing balance to the cent, transaction dates must fall inside the statement period. No model call
+6. **Escalate** — only when reconciliation fails: one more extraction on a stronger model, then back to reconcile. If it still fails, the row is marked NEEDS_REVIEW with the reasons
+7. **Finalize** — derives the statement month from the validated date. No model call
+
+Reconciled rows go to a sheet per statement month. Rows that did not reconcile go to a "Needs review" sheet with the failed checks, the balance delta, and the source file, so nothing is silently dropped.
 
 The batch runner then writes every validated result to one deduplicated Excel workbook, organized by statement month, using the columns configured for the detected format.
 
