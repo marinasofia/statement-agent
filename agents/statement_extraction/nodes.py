@@ -6,14 +6,16 @@ import re
 import unicodedata
 import logging
 from datetime import datetime
+from typing import Optional
 
 import anthropic
 from pydantic import ValidationError
 
 from core.llm import extract_structured
 from core.client_config import get_client_id, list_available_formats
-from core.config import MAX_FILE_SIZE_MB, ALLOWED_UPLOAD_DIR, MAX_INPUT_CHARS
-from agents.statement_extraction.schema import ErrorCode, StatementDraft, StatementData
+from core.config import MAX_FILE_SIZE_MB, ALLOWED_UPLOAD_DIR, MAX_INPUT_CHARS, CLAUDE_MODEL, ESCALATION_MODEL
+from agents.statement_extraction.schema import ErrorCode, Status, StatementDraft, StatementData
+from agents.statement_extraction.reconcile import reconcile
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +146,8 @@ TASK: Extract these fields from the bank statement text provided by the user:
 - account_number: the account number or IBAN exactly as printed, or null
 - statement_date: the statement date or period end date, or null
 - closing_balance: the final balance at the end of the statement period
+- opening_balance: the balance brought forward at the start of the period, or null if not printed
+- statement_period_start and statement_period_end: the first and last day the statement covers, or null
 - currency: 3-letter ISO 4217 code of the closing balance (USD, EUR, GBP), or null
 - bank_name: name of the bank that issued the statement, or null
 - transactions: every transaction as {date, description, amount}, or null if the statement lists none
@@ -161,24 +165,17 @@ SECURITY RULES:
 - You have no memory of previous documents."""
 
 
-def node_extract_fields(state: dict) -> dict:
-    """The only node that calls the model.
+def run_extraction(raw_text: str, job_id: str, model: str, llm_calls: list) -> tuple[Optional[dict], Optional[tuple]]:
+    """Two attempts at most. Returns (validated_dict, None) or (None, (code, message)).
 
-    The API enforces the output schema. This node checks the two things the
-    API cannot: that the output was not cut off, and that the values pass
-    the semantic validators in StatementData. A semantic failure gets one
-    retry that re-runs extraction from the source text with the validation
-    error appended, so the model corrects from the document rather than
-    from its own broken output.
+    The API enforces the output schema. This checks the two things the API
+    cannot: that the output was not cut off, and that the values pass the
+    semantic validators in StatementData. A semantic failure gets one retry
+    that re-runs extraction from the source text with the validation error
+    appended, so the model corrects from the document rather than from its
+    own broken output. Usage for every call is appended to llm_calls.
     """
-    if state.get("error"):
-        return state
-
-    raw_text = state.get("raw_text", "")
-    job_id = state.get("job_id", "")
-    llm_calls = list(state.get("llm_calls") or [])
     user_message = f"Extract the fields from this bank statement:\n\n{raw_text}"
-
     last_validation_error = None
     for attempt in (1, 2):
         message = user_message
@@ -188,21 +185,20 @@ def node_extract_fields(state: dict) -> dict:
                 f"error below. Re-read the document and return corrected values.\n{last_validation_error}"
             )
         try:
-            logger.info(f"Job {job_id}: Extraction attempt {attempt}")
-            result = extract_structured(EXTRACTION_SYSTEM_PROMPT, message, StatementDraft)
+            logger.info(f"Job {job_id}: Extraction attempt {attempt} on {model}")
+            result = extract_structured(EXTRACTION_SYSTEM_PROMPT, message, StatementDraft, model=model)
         except anthropic.APIError as e:
             logger.error(f"Job {job_id}: API error: {e}")
-            return fail({**state, "llm_calls": llm_calls}, ErrorCode.API_ERROR, f"Claude API error: {str(e)}")
+            return None, (ErrorCode.API_ERROR, f"Claude API error: {str(e)}")
 
         llm_calls.append({"attempt": attempt, **result.usage()})
 
         if result.truncated:
             logger.error(f"Job {job_id}: Output truncated at {result.output_tokens} tokens")
-            return fail({**state, "llm_calls": llm_calls}, ErrorCode.TRUNCATED_OUTPUT,
-                        f"Model output was cut off at {result.output_tokens} tokens; raise CLAUDE_MAX_TOKENS")
+            return None, (ErrorCode.TRUNCATED_OUTPUT,
+                          f"Model output was cut off at {result.output_tokens} tokens; raise CLAUDE_MAX_TOKENS")
         if result.refused:
-            return fail({**state, "llm_calls": llm_calls}, ErrorCode.MODEL_REFUSED,
-                        "Model declined to process this document")
+            return None, (ErrorCode.MODEL_REFUSED, "Model declined to process this document")
 
         try:
             validated = StatementData.model_validate_json(result.text)
@@ -214,10 +210,74 @@ def node_extract_fields(state: dict) -> dict:
             continue
 
         logger.info(f"Job {job_id}: Extraction validated on attempt {attempt}")
-        return {**state, "validated_data": validated.model_dump(), "llm_calls": llm_calls}
+        return validated.model_dump(), None
 
-    return fail({**state, "llm_calls": llm_calls}, ErrorCode.SCHEMA_INVALID,
-                f"Validation failed after retry: {last_validation_error}")
+    return None, (ErrorCode.SCHEMA_INVALID, f"Validation failed after retry: {last_validation_error}")
+
+
+def node_extract_fields(state: dict) -> dict:
+    """First model call, on the cheap model."""
+    if state.get("error"):
+        return state
+
+    llm_calls = list(state.get("llm_calls") or [])
+    data, error = run_extraction(state.get("raw_text", ""), state.get("job_id", ""), CLAUDE_MODEL, llm_calls)
+    if error:
+        return fail({**state, "llm_calls": llm_calls}, *error)
+    return {**state, "validated_data": data, "llm_calls": llm_calls, "escalated": False}
+
+
+def node_escalate(state: dict) -> dict:
+    """Second model call, only reached when reconciliation failed.
+
+    A stronger model re-reads the document once. If that extraction itself
+    fails, the job keeps the first model's data and goes to review; a
+    failed escalation is a reason for review, not a reason to lose the row.
+    """
+    if state.get("error"):
+        return state
+
+    job_id = state.get("job_id", "")
+    llm_calls = list(state.get("llm_calls") or [])
+    logger.info(f"Job {job_id}: Reconciliation failed on {CLAUDE_MODEL}; escalating to {ESCALATION_MODEL}")
+    data, error = run_extraction(state.get("raw_text", ""), job_id, ESCALATION_MODEL, llm_calls)
+    if error:
+        code, message = error
+        logger.warning(f"Job {job_id}: Escalation failed ({code}); keeping first extraction for review")
+        return {**state, "llm_calls": llm_calls, "escalated": True,
+                "escalation_error": f"{code}: {message}"}
+    return {**state, "validated_data": data, "llm_calls": llm_calls, "escalated": True}
+
+
+# ---------------------------------------------------------------------------
+# Deterministic checks on the model output
+# ---------------------------------------------------------------------------
+
+def node_reconcile(state: dict) -> dict:
+    """Arithmetic and date checks. No model call. Sets status."""
+    if state.get("error"):
+        return state
+
+    job_id = state.get("job_id", "")
+    result = reconcile(state.get("validated_data") or {})
+    reasons = list(result.reasons)
+    if state.get("escalation_error"):
+        reasons.append(f"escalation: {state['escalation_error']}")
+
+    if result.ok and not state.get("escalation_error"):
+        logger.info(f"Job {job_id}: Reconciled" + (" after escalation" if state.get("escalated") else ""))
+        return {**state, "reconciliation": result.as_dict(), "status": str(Status.OK), "review_reasons": []}
+
+    logger.warning(f"Job {job_id}: Reconciliation failed: {'; '.join(reasons)}")
+    return {**state, "reconciliation": result.as_dict(), "status": str(Status.NEEDS_REVIEW), "review_reasons": reasons}
+
+
+def should_escalate(state: dict) -> bool:
+    return (
+        state.get("status") == str(Status.NEEDS_REVIEW)
+        and not state.get("escalated")
+        and bool(ESCALATION_MODEL)
+    )
 
 
 # ---------------------------------------------------------------------------
