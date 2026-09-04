@@ -1,0 +1,15 @@
+{
+  "description": "Closing balance is negative. Sign must survive extraction.",
+  "expect_status": "OK",
+  "expect_error_code": null,
+  "account_holder": "Jordan Lee",
+  "account_number": "000771234",
+  "currency": "USD",
+  "opening_balance": 120.0,
+  "closing_balance": -255.0,
+  "transaction_count": 3,
+  "transactions_sum": -375.0,
+  "statement_date": "2026-08-31",
+  "statement_period_start": "2026-08-01",
+  "statement_period_end": "2026-08-31"
+}

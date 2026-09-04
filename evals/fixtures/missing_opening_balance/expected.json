@@ -1,0 +1,15 @@
+{
+  "description": "No opening balance printed. Arithmetic check is skipped and reported as skipped, status stays OK.",
+  "expect_status": "OK",
+  "expect_error_code": null,
+  "account_holder": "Sam Okafor",
+  "account_number": "30012 88891",
+  "currency": "USD",
+  "opening_balance": null,
+  "closing_balance": 650.0,
+  "transaction_count": 2,
+  "transactions_sum": 150.0,
+  "statement_date": "2026-08-31",
+  "statement_period_start": "2026-08-01",
+  "statement_period_end": "2026-08-31"
+}

@@ -1,0 +1,15 @@
+{
+  "description": "dd.mm.yyyy dates and Swiss francs.",
+  "expect_status": "OK",
+  "expect_error_code": null,
+  "account_holder": "Lukas Meier",
+  "account_number": "CH93 0076 2011 6238 5295 7",
+  "currency": "CHF",
+  "opening_balance": 10250.0,
+  "closing_balance": 14329.5,
+  "transaction_count": 3,
+  "transactions_sum": 4079.5,
+  "statement_date": "2026-08-31",
+  "statement_period_start": "2026-08-01",
+  "statement_period_end": "2026-08-31"
+}

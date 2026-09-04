@@ -1,0 +1,15 @@
+{
+  "description": "260 transactions over several pages. Output length and per-row accuracy under load.",
+  "expect_status": "OK",
+  "expect_error_code": null,
+  "account_holder": "Priya Natarajan",
+  "account_number": "60-16-13 31926819",
+  "currency": "GBP",
+  "opening_balance": 15230.44,
+  "closing_balance": 118.19,
+  "transaction_count": 260,
+  "transactions_sum": -15112.25,
+  "statement_date": "2026-06-30",
+  "statement_period_start": "2026-06-01",
+  "statement_period_end": "2026-06-30"
+}
