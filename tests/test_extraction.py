@@ -56,7 +56,7 @@ def test_valid_output_is_normalised_and_usage_recorded(monkeypatch, state):
     out = node_extract_fields(state)
     assert not out.get("error")
     assert out["validated_data"]["currency"] == "USD"
-    assert out["llm_calls"] == [{"attempt": 1, "model": "fake", "input_tokens": 100, "output_tokens": 50, "stop_reason": "end_turn"}]
+    assert out["llm_calls"] == [{"attempt": 1, "model": "fake", "input_tokens": 100, "output_tokens": 50, "stop_reason": "end_turn", "latency_ms": 0}]
     assert node_finalize(out)["statement_month"] == "2026-08"
 
 
