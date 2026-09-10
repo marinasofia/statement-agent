@@ -31,6 +31,10 @@ not new API calls or a benchmark of your computer. An installed wheel currently
 omits required configuration, so use this source-checkout setup.
 
 
+## Review and approve locally
+
+Use the [review walkthrough](docs/review-workflow.md) for an offline synthetic demo, corrections, explicit approval and retryable exports. Run `.venv/bin/python demo_review.py` to create a read-only preview. The review queue is opt-in: legacy batch `OK` still means automated checks, not human approval.
+
 ## What to look at first
 
 - `agents/statement_extraction/reconcile.py`: the deterministic check. Opening balance plus the sum of transactions must equal the closing balance to the cent, and transaction dates must fall inside the statement period. There is no model call in this file.
@@ -96,7 +100,7 @@ Dates: the prompt asks for ISO 8601 and the validator normalises month-name form
 | Same account, statement date and closing balance already in the workbook | skipped and counted | status `DUPLICATE` |
 | API 429, 5xx, or connection error | SDK retries with backoff, then fails | `API_ERROR` |
 
-The batch runner records status, error code, accepted model, tokens, estimated cost, latency, and reconciliation delta in a JSONL job report after workbook output. Failed workbook writes can currently prevent that report. Logs and reports may include filenames, reconciliation amounts, and error context; treat them as sensitive. The batch summary prints status counts, estimated spend, and latency statistics.
+The batch runner records status, error code, accepted model, tokens, estimated cost, latency, and reconciliation delta in a JSONL job report after workbook output. Workbook failures retain a separate run report when its destination is writable. Logs and reports may include filenames, reconciliation amounts, and error context; treat them as sensitive. The batch summary prints status counts, estimated spend, and latency statistics.
 
 ## Cost and model choice
 
@@ -131,9 +135,7 @@ mkdir -p uploads outputs
 ```
 
 For another input directory, set `UPLOAD_DIR` before starting Python as well
-as `--input`; file validation uses the configured upload root. Keep an output
-directory component, such as `outputs/report.xlsx`, until bare-filename support
-is fixed. `--month` is only a fallback when the extracted date provides no month.
+as `--input`; file validation uses the configured upload root. Bare output filenames and paths with a directory component are supported. `--month` is only a fallback when the extracted date provides no month.
 
 Environment variables: `ANTHROPIC_API_KEY`, `CLAUDE_MODEL`, `ESCALATION_MODEL`
 (empty disables escalation), `CLAUDE_MAX_TOKENS`, `MAX_INPUT_CHARS`,
@@ -145,7 +147,7 @@ provider account. No API key is needed for the replay quickstart or tests.
 
 ## Out of scope, on purpose
 
-OCR for scanned statements. Formats beyond the ones in `formats_library`. A web interface. Each would add surface area without changing the core question, which is whether the numbers can be trusted.
+OCR for scanned statements. Formats beyond the ones in `formats_library`. A hosted multi-user review interface. The local review CLI and static preview are described above.
 
 ## Stack
 

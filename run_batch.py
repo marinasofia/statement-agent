@@ -1,9 +1,11 @@
 import argparse
 import glob
+import hashlib
 import json
 import logging
 import os
 import re
+import sqlite3
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -15,6 +17,7 @@ from agents.statement_extraction.job import JobResult, summarise
 from core.client_config import get_client_id
 from core.config import ALLOWED_UPLOAD_DIR, EXCEL_OUTPUT_PATH
 from core.excel import write_workbook
+from core.review import ReviewQueue
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -52,6 +55,10 @@ def parse_args(argv=None):
         action="store_true",
         help="Print account holder and balance per file. Off by default so "
         "statement content stays out of terminal logs.",
+    )
+    parser.add_argument(
+        "--review-db",
+        help="Persist each extraction for explicit review before workbook export",
     )
     args = parser.parse_args(argv)
     if args.month and not MONTH_PATTERN.match(args.month):
@@ -106,6 +113,27 @@ def main(argv=None):
 
     print(f"Found {len(pdf_files)} PDFs. Processing with {args.workers} workers...")
 
+    queue = ReviewQueue(args.review_db) if args.review_db else None
+    if queue is not None:
+        saved = {item["id"] for item in queue.list() if item["status"] != "FAILED"}
+        pending = []
+        for pdf in pdf_files:
+            source = Path(pdf).resolve()
+            if not source.is_relative_to(Path(ALLOWED_UPLOAD_DIR).resolve()):
+                logger.error("Review input is outside the allowed upload directory")
+                return 1
+            try:
+                identity = hashlib.sha256(source.read_bytes()).hexdigest()
+            except OSError:
+                logger.error("Review input could not be read")
+                return 1
+            if identity not in saved:
+                pending.append(pdf)
+                saved.add(identity)
+        pdf_files = pending
+        print(
+            f"{len(pdf_files)} files need extraction; previously saved successful items are retained."
+        )
     results = []
     completed = 0
 
@@ -113,6 +141,18 @@ def main(argv=None):
         futures = {executor.submit(process_pdf, pdf): pdf for pdf in pdf_files}
         for future in as_completed(futures):
             result = future.result()
+            if queue is not None:
+                source = Path(futures[future]).resolve()
+                if not source.is_relative_to(Path(ALLOWED_UPLOAD_DIR).resolve()):
+                    logger.error("Review input is outside the allowed upload directory")
+                    return 1
+                try:
+                    queue.add(result, source.read_bytes())
+                except (OSError, ValueError, sqlite3.Error):
+                    logger.error(
+                        "Review record could not be saved; stopping before export"
+                    )
+                    return 1
             results.append(result)
             completed += 1
             pdf_name = os.path.basename(futures[future])
@@ -132,6 +172,12 @@ def main(argv=None):
                     data = result.get("validated_data", {})
                     detail = f": {data.get('account_holder')} | {data.get('closing_balance')} {data.get('currency') or ''}"
                 print(f"{prefix} {tag:<13} {pdf_name}{detail}")
+
+    if queue is not None:
+        print(
+            f"Saved {len(results)} extraction results to the review queue. No workbook exported."
+        )
+        return 1 if any(r.get("error") for r in results) else 0
 
     # No interactive prompt: an unattended run must never block on stdin.
     # Rows without a parseable date go to --month if given, else "Unsorted".
