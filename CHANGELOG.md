@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-09-12
+
+- Separate project overview from detailed technical documentation.
+
+
 Meaningful changes are recorded here. Unreleased entries describe work on the
 development branch; they do not imply a published package or deployed site.
 
