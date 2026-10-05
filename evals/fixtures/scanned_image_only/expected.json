@@ -1,0 +1,5 @@
+{
+  "description": "Image-only PDF. Rejected deterministically, no model call.",
+  "expect_status": "FAILED",
+  "expect_error_code": "SCANNED"
+}

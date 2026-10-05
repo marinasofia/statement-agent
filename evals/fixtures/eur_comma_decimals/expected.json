@@ -1,0 +1,15 @@
+{
+  "description": "European formatting: comma decimals, dot thousands, dd/mm/yyyy dates, IBAN.",
+  "expect_status": "OK",
+  "expect_error_code": null,
+  "account_holder": "Camille Dupont",
+  "account_number": "FR76 3000 6000 0112 3456 7890 189",
+  "currency": "EUR",
+  "opening_balance": 4830.5,
+  "closing_balance": 6306.13,
+  "transaction_count": 5,
+  "transactions_sum": 1475.63,
+  "statement_date": "2026-07-31",
+  "statement_period_start": "2026-07-01",
+  "statement_period_end": "2026-07-31"
+}

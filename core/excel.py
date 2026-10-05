@@ -1,0 +1,245 @@
+"""Excel workbook writer for batch results.
+
+One writer, used by run_batch. Reconciled rows are grouped into one sheet
+per statement month. Rows that did not reconcile go to a "Needs review"
+sheet with the reasons and the balance delta, so a reviewer sees them
+instead of losing them.
+
+Deduplication: a statement is the same statement when it is for the same
+account, the same statement date, and the same closing balance. That key
+is written to a hidden "Row key" column on every sheet, so a later run
+can dedup against rows already on disk no matter which columns a client
+chose to display. Keying on the account holder alone would merge two
+accounts owned by one person, and keying on displayed columns would make
+dedup depend on layout.
+"""
+
+import fcntl
+import logging
+import math
+import os
+import tempfile
+from collections.abc import Sequence
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any
+
+from openpyxl import Workbook, load_workbook
+from openpyxl.cell import Cell
+from openpyxl.worksheet.worksheet import Worksheet
+
+from core.client_config import load_format_config
+from agents.statement_extraction.reconcile import minor_unit, to_money
+
+REVIEW_SHEET = "Needs review"
+SUMMARY_SHEET = "Run summary"
+REVIEW_EXTRA_HEADERS = ["Reasons", "Balance delta", "Source file"]
+ROW_KEY_HEADER = "Row key"
+
+
+def _fold(value) -> str:
+    return " ".join(str(value or "").casefold().split())
+
+
+def _digits(value) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isalnum()).casefold()
+
+
+def row_key(data: dict) -> str:
+    account = _digits(data.get("account_number")) or _fold(data.get("account_holder"))
+    closing = data.get("closing_balance")
+    closing_text = ""
+    if isinstance(closing, (int, float)) and not isinstance(closing, bool):
+        amount = to_money(closing) + 0                 # "+ 0" turns -0.00 into 0.00
+        closing_text = f"{amount:.{minor_unit(data.get('currency'))}f}"
+    return f"{account}|{data.get('statement_date') or ''}|{closing_text}"
+
+
+logger = logging.getLogger(__name__)
+
+
+def _append_literal_row(sheet: Worksheet, values: Sequence[Any]) -> None:
+    """Store text as text, including formula prefixes and spreadsheet error tokens."""
+    cells = []
+    for value in values:
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("Workbook numeric values must be finite")
+        cell = Cell(sheet, value=value)
+        if isinstance(value, str):
+            cell.data_type = "s"
+        cells.append(cell)
+    sheet.append(cells)
+
+
+def _save_atomic(workbook: Workbook, target: Path) -> None:
+    """Replace the destination only after a complete workbook has been written."""
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{target.stem}-", suffix=".xlsx", dir=target.parent
+    )
+    os.close(descriptor)
+    temporary = Path(name)
+    try:
+        workbook.save(temporary)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _existing_keys(ws):
+    header = [c.value for c in ws[1]]
+    if ROW_KEY_HEADER not in header:
+        return set()
+    idx = header.index(ROW_KEY_HEADER)
+    return {row[idx] for row in ws.iter_rows(min_row=2, values_only=True) if row[idx]}
+
+
+def _hide_row_key(ws, header_count):
+    letter = ws.cell(row=1, column=header_count).column_letter
+    ws.column_dimensions[letter].hidden = True
+
+
+def _autofit(ws, columns, label_by_name):
+    for i, col_name in enumerate(columns, start=1):
+        values = [label_by_name.get(col_name, col_name)]
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if row[i - 1] is not None:
+                values.append(str(row[i - 1]))
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = (
+            int(max(len(v) for v in values) * 1.2) + 4
+        )
+
+
+@contextmanager
+def _exclusive(target: Path):
+    """Hold an OS lock on a sidecar file while a writer reads, appends and replaces the workbook.
+
+    The atomic replace prevents a torn file, but without this lock two writers both load
+    the same old workbook and the second save silently drops the first one's rows."""
+    lock_path = target.with_name(f".{target.name}.lock")
+    with open(lock_path, "a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def write_workbook(results, output_path, client_id, fallback_month=None):
+    """Write every extracted result to the workbook, one writer at a time.
+
+    Returns a dict of counts: ok, needs_review, duplicate, failed.
+    """
+    target = Path(output_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with _exclusive(target):
+        return _write_workbook(results, output_path, client_id, fallback_month)
+
+
+def _write_workbook(results, output_path, client_id, fallback_month=None):
+    counts = {"ok": 0, "needs_review": 0, "duplicate": 0, "failed": 0}
+    workbook_dirty = False
+    target = Path(output_path)
+
+    if os.path.exists(output_path):
+        wb = load_workbook(output_path)
+    else:
+        wb = Workbook()
+        wb.remove(wb.active)
+
+    try:
+        keys_by_sheet = {}
+        columns_by_sheet = {}
+
+        for result in results:
+            if result.get("error"):
+                counts["failed"] += 1
+                continue
+
+            config = load_format_config(client_id, result.get("format_id") or "default")
+            columns = config["excel_output"]["columns"]
+            label_by_name = {
+                f["name"]: f.get("label", f["name"]) for f in config["fields"]
+            }
+            headers = [label_by_name.get(col, col) for col in columns]
+
+            data = result.get("validated_data", {})
+            needs_review = result.get("status") == "NEEDS_REVIEW"
+            if needs_review:
+                sheet = REVIEW_SHEET
+                headers = headers + REVIEW_EXTRA_HEADERS
+            else:
+                sheet = result.get("statement_month") or fallback_month or "Unsorted"
+            headers = headers + [ROW_KEY_HEADER]
+
+            if sheet not in wb.sheetnames:
+                ws = wb.create_sheet(title=sheet)
+                _append_literal_row(ws, headers)
+                ws.freeze_panes = "A2"
+                _hide_row_key(ws, len(headers))
+                keys_by_sheet[sheet] = set()
+            else:
+                ws = wb[sheet]
+                if [cell.value for cell in ws[1]] != headers:
+                    raise ValueError(
+                        f"Existing worksheet {sheet!r} has incompatible columns"
+                    )
+                keys_by_sheet.setdefault(sheet, _existing_keys(ws))
+            columns_by_sheet[sheet] = (columns, label_by_name)
+
+            key = row_key(data)
+            if key in keys_by_sheet[sheet]:
+                counts["duplicate"] += 1
+                result["duplicate"] = True
+                logger.info("Skipping duplicate row in %s", sheet)
+                continue
+
+            row = [data.get(col) for col in columns]
+            if needs_review:
+                delta = (result.get("reconciliation") or {}).get("balance_delta")
+                row += [
+                    "; ".join(result.get("review_reasons") or []),
+                    delta,
+                    os.path.basename(result.get("file_path") or ""),
+                ]
+                counts["needs_review"] += 1
+            else:
+                counts["ok"] += 1
+            row.append(key)
+            _append_literal_row(ws, row)
+            keys_by_sheet[sheet].add(key)
+            workbook_dirty = True
+
+        for sheet, (columns, label_by_name) in columns_by_sheet.items():
+            extra = REVIEW_EXTRA_HEADERS if sheet == REVIEW_SHEET else []
+            _autofit(wb[sheet], columns + extra, label_by_name)
+
+        summary_sheet = wb[SUMMARY_SHEET] if SUMMARY_SHEET in wb else None
+        summary_rows = list(summary_sheet.values) if summary_sheet is not None else []
+        owned_summary = (
+            len(summary_rows) == len(counts) + 1
+            and summary_rows[0] == ("Outcome", "Count")
+            and all(
+                len(row) == 2 and row[0] == key and type(row[1]) is int
+                for row, key in zip(summary_rows[1:], counts)
+            )
+        )
+        if not wb.sheetnames or (wb.sheetnames == [SUMMARY_SHEET] and owned_summary):
+            ws = (
+                summary_sheet
+                if summary_sheet is not None
+                else wb.create_sheet(SUMMARY_SHEET)
+            )
+            ws.delete_rows(1, ws.max_row)
+            _append_literal_row(ws, ["Outcome", "Count"])
+            for outcome, count in counts.items():
+                _append_literal_row(ws, [outcome, count])
+            workbook_dirty = True
+        elif owned_summary:
+            wb.remove(summary_sheet)
+            workbook_dirty = True
+
+        if workbook_dirty or not target.exists():
+            _save_atomic(wb, target)
+    finally:
+        wb.close()
+    return counts

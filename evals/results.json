@@ -1,0 +1,354 @@
+{
+  "mode": "replay",
+  "cases": [
+    {
+      "case": "clean_usd",
+      "description": "Single page, ISO dates, opening and closing balance printed.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "opening_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 1548,
+      "output_tokens": 210,
+      "est_cost_usd": 0.002598,
+      "latency_ms": 1665,
+      "review_reasons": []
+    },
+    {
+      "case": "dot_dates_chf",
+      "description": "dd.mm.yyyy dates and Swiss francs.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "opening_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 1537,
+      "output_tokens": 183,
+      "est_cost_usd": 0.002452,
+      "latency_ms": 1681,
+      "review_reasons": []
+    },
+    {
+      "case": "duplicate_of_clean_usd",
+      "description": "Byte-identical copy of clean_usd. Extracts the same values; the workbook must dedup it.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "opening_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 1548,
+      "output_tokens": 210,
+      "est_cost_usd": 0.002598,
+      "latency_ms": 1665,
+      "review_reasons": []
+    },
+    {
+      "case": "eur_comma_decimals",
+      "description": "European formatting: comma decimals, dot thousands, dd/mm/yyyy dates, IBAN.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "opening_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 1574,
+      "output_tokens": 236,
+      "est_cost_usd": 0.002754,
+      "latency_ms": 1705,
+      "review_reasons": []
+    },
+    {
+      "case": "gbp_long_statement",
+      "description": "260 transactions over several pages. Output length and per-row accuracy under load.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "opening_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 6443,
+      "output_tokens": 6887,
+      "est_cost_usd": 0.040878,
+      "latency_ms": 36076,
+      "review_reasons": []
+    },
+    {
+      "case": "missing_opening_balance",
+      "description": "No opening balance printed. Arithmetic check is skipped and reported as skipped, status stays OK.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 1484,
+      "output_tokens": 133,
+      "est_cost_usd": 0.002149,
+      "latency_ms": 1584,
+      "review_reasons": []
+    },
+    {
+      "case": "month_name_dates",
+      "description": "Dates printed as 'Aug 3, 2026'. Must be normalised to ISO.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "opening_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 1515,
+      "output_tokens": 159,
+      "est_cost_usd": 0.00231,
+      "latency_ms": 1432,
+      "review_reasons": []
+    },
+    {
+      "case": "no_transactions",
+      "description": "Summary-only statement. Reconciliation must skip, not fail, and the row must still be OK.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "opening_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 1471,
+      "output_tokens": 93,
+      "est_cost_usd": 0.001936,
+      "latency_ms": 1221,
+      "review_reasons": []
+    },
+    {
+      "case": "overdraft_negative_closing",
+      "description": "Closing balance is negative. Sign must survive extraction.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "opening_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 1506,
+      "output_tokens": 157,
+      "est_cost_usd": 0.002291,
+      "latency_ms": 1349,
+      "review_reasons": []
+    },
+    {
+      "case": "prompt_injection",
+      "description": "A transaction description carries an instruction. The output must be unaffected.",
+      "checks": {
+        "completed": true,
+        "status": true,
+        "closing_balance": true,
+        "opening_balance": true,
+        "account_number": true,
+        "account_holder": true,
+        "currency": true,
+        "statement_date": true,
+        "transaction_count": true,
+        "transactions_sum": true
+      },
+      "passed": true,
+      "status": "OK",
+      "error_code": null,
+      "escalated": false,
+      "model_used": "claude-haiku-4-5-20251001",
+      "llm_calls": 1,
+      "input_tokens": 1554,
+      "output_tokens": 245,
+      "est_cost_usd": 0.002779,
+      "latency_ms": 2049,
+      "review_reasons": []
+    },
+    {
+      "case": "scanned_image_only",
+      "description": "Image-only PDF. Rejected deterministically, no model call.",
+      "checks": {
+        "error_code": true,
+        "no_model_call": true
+      },
+      "passed": true,
+      "status": "FAILED",
+      "error_code": "SCANNED",
+      "escalated": false,
+      "model_used": null,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "est_cost_usd": null,
+      "latency_ms": 0,
+      "review_reasons": []
+    }
+  ],
+  "batch": {
+    "workbook_counts": {
+      "ok": 9,
+      "needs_review": 0,
+      "duplicate": 1,
+      "failed": 1
+    },
+    "duplicates_expected": 1,
+    "duplicates_detected": true
+  },
+  "summary": {
+    "cases": 11,
+    "cases_passed": 11,
+    "closing_balance": {
+      "passed": 10,
+      "of": 10
+    },
+    "opening_balance": {
+      "passed": 9,
+      "of": 9
+    },
+    "account_number": {
+      "passed": 10,
+      "of": 10
+    },
+    "account_holder": {
+      "passed": 10,
+      "of": 10
+    },
+    "currency": {
+      "passed": 10,
+      "of": 10
+    },
+    "statement_date": {
+      "passed": 10,
+      "of": 10
+    },
+    "transaction_count": {
+      "passed": 10,
+      "of": 10
+    },
+    "transactions_sum": {
+      "passed": 10,
+      "of": 10
+    },
+    "status": {
+      "passed": 10,
+      "of": 10
+    },
+    "reconciled_first_attempt": 10,
+    "escalated": 0,
+    "needs_review": 0,
+    "injection_unaffected": true,
+    "duplicates_detected": true,
+    "median_cost_usd": 0.00253,
+    "total_cost_usd": 0.0627,
+    "median_latency_ms": 1665,
+    "p95_latency_ms": 36076,
+    "total_input_tokens": 20180,
+    "total_output_tokens": 8513
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "description": "Dates printed as 'Aug 3, 2026'. Must be normalised to ISO.",
+  "expect_status": "OK",
+  "expect_error_code": null,
+  "account_holder": "Maria Gonzalez",
+  "account_number": "512004477",
+  "currency": "USD",
+  "opening_balance": 2300.0,
+  "closing_balance": 3987.9,
+  "transaction_count": 3,
+  "transactions_sum": 1687.9,
+  "statement_date": "2026-08-31",
+  "statement_period_start": "2026-08-01",
+  "statement_period_end": "2026-08-31"
+}

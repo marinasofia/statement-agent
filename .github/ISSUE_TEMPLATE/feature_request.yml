@@ -1,0 +1,23 @@
+name: Feature or documentation request
+description: Describe a use case, documentation gap, or proposed improvement.
+title: "proposal: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Who needs this, and what cannot they do today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome and acceptance criteria
+      description: Describe observable behavior and how it could be verified.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and scope
+      description: Note existing workarounds and what should remain outside this change.

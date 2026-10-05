@@ -1,0 +1,8 @@
+{
+  "text": "{\"account_holder\":\"Jordan Lee\",\"closing_balance\":-255.00,\"opening_balance\":120.00,\"account_number\":\"000771234\",\"statement_date\":\"2026-08-31\",\"statement_period_start\":\"2026-08-01\",\"statement_period_end\":\"2026-08-31\",\"currency\":\"USD\",\"bank_name\":\"Harbor Credit Union\",\"transactions\":[{\"date\":\"2026-08-03\",\"description\":\"Rent\",\"amount\":-950.00},{\"date\":\"2026-08-04\",\"description\":\"Overdraft fee\",\"amount\":-35.00},{\"date\":\"2026-08-15\",\"description\":\"Paycheck\",\"amount\":610.00}]}",
+  "stop_reason": "end_turn",
+  "model": "claude-haiku-4-5-20251001",
+  "input_tokens": 1506,
+  "output_tokens": 157,
+  "latency_ms": 1349
+}

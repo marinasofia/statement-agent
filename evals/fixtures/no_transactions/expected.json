@@ -1,0 +1,15 @@
+{
+  "description": "Summary-only statement. Reconciliation must skip, not fail, and the row must still be OK.",
+  "expect_status": "OK",
+  "expect_error_code": null,
+  "account_holder": "Riley Chen",
+  "account_number": "88-2201-5",
+  "currency": "USD",
+  "opening_balance": 9000.0,
+  "closing_balance": 9000.0,
+  "transaction_count": 0,
+  "transactions_sum": 0,
+  "statement_date": "2026-08-31",
+  "statement_period_start": "2026-08-01",
+  "statement_period_end": "2026-08-31"
+}

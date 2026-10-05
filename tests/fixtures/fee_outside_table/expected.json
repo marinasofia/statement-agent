@@ -1,0 +1,15 @@
+{
+  "description": "A fee is printed in a note below the table. Repair must add it from that line.",
+  "expect_status": "OK",
+  "expect_error_code": null,
+  "account_holder": "Taylor Brooks",
+  "account_number": "4401 7781 0045",
+  "currency": "USD",
+  "opening_balance": 2140.0,
+  "closing_balance": 3781.1,
+  "transaction_count": 4,
+  "transactions_sum": 1641.1,
+  "statement_date": "2026-08-31",
+  "statement_period_start": "2026-08-01",
+  "statement_period_end": "2026-08-31"
+}

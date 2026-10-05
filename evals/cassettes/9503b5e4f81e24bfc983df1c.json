@@ -1,0 +1,8 @@
+{
+  "text": "{\"account_holder\":\"Camille Dupont\",\"closing_balance\":6306.13,\"opening_balance\":4830.50,\"account_number\":\"FR76 3000 6000 0112 3456 7890 189\",\"statement_date\":\"2026-07-31\",\"statement_period_start\":\"2026-07-01\",\"statement_period_end\":\"2026-07-31\",\"currency\":\"EUR\",\"bank_name\":\"Banque Fictive SA\",\"transactions\":[{\"date\":\"2026-07-03\",\"description\":\"Loyer juillet\",\"amount\":-1250.00},{\"date\":\"2026-07-07\",\"description\":\"Virement salaire\",\"amount\":2890.00},{\"date\":\"2026-07-15\",\"description\":\"Supermarche\",\"amount\":-132.47},{\"date\":\"2026-07-22\",\"description\":\"Assurance auto\",\"amount\":-76.90},{\"date\":\"2026-07-30\",\"description\":\"Remboursement\",\"amount\":45.00}]}",
+  "stop_reason": "end_turn",
+  "model": "claude-haiku-4-5-20251001",
+  "input_tokens": 1574,
+  "output_tokens": 236,
+  "latency_ms": 1705
+}

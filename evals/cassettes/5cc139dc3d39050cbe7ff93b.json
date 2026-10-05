@@ -1,0 +1,8 @@
+{
+  "text": "{\"account_holder\":\"Sam Okafor\",\"closing_balance\":650.00,\"opening_balance\":null,\"account_number\":\"30012 88891\",\"statement_date\":\"2026-08-31\",\"statement_period_start\":\"2026-08-01\",\"statement_period_end\":\"2026-08-31\",\"currency\":\"USD\",\"bank_name\":\"Cedar Bank\",\"transactions\":[{\"date\":\"2026-08-05\",\"description\":\"Deposit\",\"amount\":200.00},{\"date\":\"2026-08-12\",\"description\":\"Withdrawal\",\"amount\":-50.00}]}",
+  "stop_reason": "end_turn",
+  "model": "claude-haiku-4-5-20251001",
+  "input_tokens": 1484,
+  "output_tokens": 133,
+  "latency_ms": 1584
+}

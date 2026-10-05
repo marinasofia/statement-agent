@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible problem using public or synthetic examples.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For vulnerabilities or exposed data, follow SECURITY.md instead of posting here.
+        Do not attach credentials, personal records, private documents, or unredacted logs.
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      description: Include the commit SHA or release you tested.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps and minimal example
+      description: Include the command or page, platform, and synthetic input needed to reproduce.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include redacted output or a screenshot without personal data.
+    validations:
+      required: true
