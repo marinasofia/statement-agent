@@ -10,13 +10,14 @@ The following checks run offline and require no API key:
 
 ```bash
 .venv/bin/python -m pytest -q
-mkdir -p outputs
-.venv/bin/python -m evals.run_evals --mode replay --out outputs/eval-replay.json
+.venv/bin/python -m evals.run_evals --mode replay
 ```
 
-The repository's Makefile assumes `.venv/bin/python`. `make test` runs tests;
-`make eval` writes the tracked `evals/results.json`, so inspect that diff before
-committing. `make eval-live` and `make eval-record` make paid API requests;
+The replay writes `outputs/eval-replay.json`, which is ignored by git. The
+tracked `evals/results.json` is the published snapshot; refresh it with
+`make eval-snapshot` only when the runner output or the recordings change, and
+inspect that diff before committing. `make test` runs tests and `make eval` runs
+the replay. `make eval-live` and `make eval-record` make paid API requests;
 record mode replaces cassettes. Run them only when intentionally updating the
 model evaluation, then record model/prompt/schema versions and compare outcomes.
 
