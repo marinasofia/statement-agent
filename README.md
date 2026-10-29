@@ -99,6 +99,8 @@ The cases cover US, Swiss, European and UK formats, comma decimals, dotted and m
 
 **Excel export is safe to open.** Every string is written as a text cell, so a transaction description like `=HYPERLINK(...)` shows as text instead of running as a formula.
 
+**Clients override the library, not the code.** [`formats_library/default.yaml`](formats_library/default.yaml) defines the fields and the six workbook columns. A client folder states only what differs: [`clients/example/`](clients/example/overrides/default.yaml) is a two column workbook, selected with `CLIENT_ID=example`.
+
 **Runs resume instead of repeating paid calls.** Each result is saved the moment it finishes, keyed by the SHA-256 of the file's bytes. A crash loses only the files in flight, a renamed copy is recognized, and an edited file is extracted again. Saved results drop the raw statement text, and the database is readable by its owner only.
 
 ## Project layout
