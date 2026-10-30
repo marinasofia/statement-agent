@@ -1,9 +1,12 @@
 PY := uv run python
 
-.PHONY: test eval eval-snapshot eval-record eval-live fixtures
+.PHONY: test lint eval eval-snapshot eval-record eval-live fixtures
 
 test:
 	$(PY) -m pytest -q
+
+lint:
+	uv run ruff check .
 
 # CI target: replays recorded model responses, needs no API key.
 # Writes outputs/eval-replay.json and leaves the tracked snapshot alone.

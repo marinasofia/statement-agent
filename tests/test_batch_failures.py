@@ -59,7 +59,8 @@ def test_log_failure_returns_nonzero(tmp_path, monkeypatch):
 
 def test_review_abort_cancels_queued_extractions(tmp_path, monkeypatch):
     """A failed review save stops the batch without paying for the files still queued."""
-    import threading, time
+    import threading
+    import time
     for i in range(10):
         (tmp_path / f"s{i}.pdf").write_bytes(f"%PDF synthetic {i}".encode())
     calls, lock = [], threading.Lock()

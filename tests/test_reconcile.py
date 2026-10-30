@@ -1,4 +1,3 @@
-import pytest
 
 from agents.statement_extraction.reconcile import reconcile
 
