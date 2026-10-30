@@ -1,14 +1,11 @@
 # Changelog
 
-## 2026-09-12
-
-- Separate project overview from detailed technical documentation.
-
-
 Meaningful changes are recorded here. Unreleased entries describe work on the
 development branch; they do not imply a published package or deployed site.
 
 ## Unreleased
+
+## 0.2.0 (2026-10-05) Initial public release
 
 ### Fixed
 
@@ -24,9 +21,4 @@ development branch; they do not imply a published package or deployed site.
 ### Changed
 
 - Documented a repository-specific quickstart.
-
-## Earlier history
-
-See the [commit history](https://github.com/marinasofia/statement-agent/commits/main/)
-for changes before this changelog was introduced. Historical release dates
-have not been inferred from package version numbers.
+- Separated the project overview from the detailed technical documentation.
