@@ -1,4 +1,4 @@
-PY := .venv/bin/python
+PY := uv run python
 
 .PHONY: test eval eval-snapshot eval-record eval-live fixtures
 

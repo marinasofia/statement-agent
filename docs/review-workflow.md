@@ -4,10 +4,10 @@ The review queue is a single-operator CLI with a read-only HTML preview. It runs
 
 ## Synthetic walkthrough, no API calls
 
-From the checkout after installing the README dependencies:
+From the checkout after the README setup (`uv sync --locked --extra dev`):
 
 ```bash
-.venv/bin/python demo_review.py
+uv run python demo_review.py
 ```
 
 Open `outputs/demo-review.html`. It presents source text, original extraction, current values, checks and audit history. Compare with `evals/fixtures/clean_usd/statement.pdf`; the source text is extracted text, not a visual proof of every PDF field. The demo starts in `NEEDS_REVIEW` even if arithmetic passes.
@@ -16,13 +16,13 @@ Copy the printed item ID into `ITEM` below. The queue retains it across restarts
 
 ```bash
 ITEM=replace_with_printed_id
-.venv/bin/python review.py --db outputs/demo-review.sqlite show "$ITEM"
+uv run python review.py --db outputs/demo-review.sqlite show "$ITEM"
 ```
 
 To correct a value, save the complete `current` object from `show` as `outputs/correction.json`, edit the relevant fields, then submit it with the displayed revision:
 
 ```bash
-.venv/bin/python review.py --db outputs/demo-review.sqlite correct "$ITEM" \
+uv run python review.py --db outputs/demo-review.sqlite correct "$ITEM" \
   --revision 0 --reviewer Marina --reason 'Compared the name with the PDF' \
   --data outputs/correction.json
 ```
@@ -30,9 +30,9 @@ To correct a value, save the complete `current` object from `show` as `outputs/c
 A correction increments the revision and requires approval again. The original extraction remains available. Reload with `show` before each edit to avoid approving stale values.
 
 ```bash
-.venv/bin/python review.py --db outputs/demo-review.sqlite approve "$ITEM" \
+uv run python review.py --db outputs/demo-review.sqlite approve "$ITEM" \
   --revision 1 --reviewer Marina --reason 'Compared every field and transaction with the PDF'
-.venv/bin/python review.py --db outputs/demo-review.sqlite export "$ITEM"
+uv run python review.py --db outputs/demo-review.sqlite export "$ITEM"
 ```
 
 If no correction was made, approve revision 0 instead. Failed checks block approval. Skipped checks require `--acknowledge-skipped` and a reason explaining the independent review. An acknowledgement records a human decision; it does not convert an unperformed check into a passed check.
@@ -42,7 +42,7 @@ The exported workbook includes the summary, transaction rows and approval histor
 Regenerate the preview after edits:
 
 ```bash
-.venv/bin/python review.py --db outputs/demo-review.sqlite preview "$ITEM" \
+uv run python review.py --db outputs/demo-review.sqlite preview "$ITEM" \
   --output outputs/demo-review.html
 ```
 

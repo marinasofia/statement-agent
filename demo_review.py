@@ -18,7 +18,7 @@ def main():
     queue.preview(identity, "outputs/demo-review.html")
     print(f"Item: {identity}")
     print("Preview: outputs/demo-review.html")
-    print(f".venv/bin/python review.py --db outputs/demo-review.sqlite show {identity}")
+    print(f"uv run python review.py --db outputs/demo-review.sqlite show {identity}")
 
 
 if __name__ == "__main__":

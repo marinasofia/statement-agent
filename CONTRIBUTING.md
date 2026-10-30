@@ -5,12 +5,12 @@ Follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities through
 
 ## Setup and checks
 
-Use Python 3.12 or newer and the checkout setup in [README.md](README.md).
+Use Python 3.12 or newer, [uv](https://docs.astral.sh/uv/) and the checkout setup in [README.md](README.md).
 The following checks run offline and require no API key:
 
 ```bash
-.venv/bin/python -m pytest -q
-.venv/bin/python -m evals.run_evals --mode replay
+uv run python -m pytest -q
+uv run python -m evals.run_evals --mode replay
 ```
 
 The replay writes `outputs/eval-replay.json`, which is ignored by git. The
@@ -23,7 +23,7 @@ model evaluation, then record model/prompt/schema versions and compare outcomes.
 
 ## Debugging and changes
 
-Use `.venv/bin/python -m pytest tests/test_reconcile.py -q` to isolate arithmetic
+Use `uv run python -m pytest tests/test_reconcile.py -q` to isolate arithmetic
 checks. Use `--pdb -x` on a failing test to inspect synthetic state. Patch model
 calls in unit tests. Do not put real statements, credentials, or identifying
 logs into fixtures. `--verbose` on the live runner prints account details.
