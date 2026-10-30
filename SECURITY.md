@@ -6,9 +6,8 @@ Security fixes target the current `main` branch.
 
 ## Report privately
 
-Email the maintainer using the email address on the [portfolio contact page](https://marinasofia.github.io/#contact) with subject
-`statement-agent security`. If GitHub's Security tab offers **Report a vulnerability**,
-that private channel may also be used. Ordinary GitHub issues are public.
+Report privately through **Report a vulnerability** in this repository's
+Security tab. Ordinary GitHub issues are public.
 
 Include the affected commit, impact, and a minimal synthetic reproduction.
 Do not send active credentials or real customer records. For exposed secrets,
