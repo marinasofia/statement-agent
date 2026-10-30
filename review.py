@@ -5,12 +5,15 @@ import json
 import sqlite3
 from pathlib import Path
 
+from core.config import PROJECT_ROOT
 from core.review import ReviewQueue
+
+OUTPUTS = PROJECT_ROOT / "outputs"
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", default="outputs/review.sqlite")
+    parser.add_argument("--db", default=str(OUTPUTS / "review.sqlite"))
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list")
     imp = sub.add_parser("import-result")
@@ -32,9 +35,9 @@ def main(argv=None):
         if command == "approve":
             item.add_argument("--acknowledge-skipped", action="store_true")
         if command == "preview":
-            item.add_argument("--output", default="outputs/review.html")
+            item.add_argument("--output", default=str(OUTPUTS / "review.html"))
         if command == "export":
-            item.add_argument("--directory", default="outputs/approved")
+            item.add_argument("--directory", default=str(OUTPUTS / "approved"))
     args = parser.parse_args(argv)
     queue = ReviewQueue(args.db)
     try:

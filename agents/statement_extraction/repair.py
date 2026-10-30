@@ -438,7 +438,7 @@ def run_repair(data: dict, raw_text: str, failed: list[str], model: str, llm_cal
         results = []
         for call in turn.tool_calls:
             output = session.dispatch(call["name"], call["input"] or {})
-            logger.info(f"Job {job_id}: repair tool {call['name']} -> {'error' if 'error' in output else 'ok'}")
+            logger.info("Job %s: repair tool %s -> %s", job_id, call["name"], "error" if "error" in output else "ok")
             results.append({"type": "tool_result", "tool_use_id": call["id"],
                             "content": json.dumps(output, ensure_ascii=False), "is_error": "error" in output})
         messages.append({"role": "user", "content": results})
@@ -448,6 +448,6 @@ def run_repair(data: dict, raw_text: str, failed: list[str], model: str, llm_cal
         if spent >= Decimal(str(MAX_COST_USD)):
             outcome = "over_budget"
             break
-    logger.info(f"Job {job_id}: repair {outcome} after {turns} turns, {len(session.edits)} edits")
+    logger.info("Job %s: repair %s after %d turns, %d edits", job_id, outcome, turns, len(session.edits))
     return RepairOutcome(data=session.data, outcome=outcome, summary=session.summary, model=model,
                          turns=turns, edits=session.edits)

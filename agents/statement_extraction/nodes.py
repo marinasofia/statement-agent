@@ -1,11 +1,9 @@
 import pdfplumber
-import json
 import uuid
 import os
 import re
 import unicodedata
 import logging
-from datetime import datetime
 from typing import Optional
 
 import anthropic
@@ -83,7 +81,7 @@ def node_validate_file(state: dict) -> dict:
         return fail(state, ErrorCode.TOO_LARGE, f"File exceeds {MAX_FILE_SIZE_MB}MB limit")
 
     job_id = str(uuid.uuid4())
-    logger.info(f"Job {job_id}: File validated")
+    logger.info("Job %s: File validated", job_id)
     return {**state, "job_id": job_id, "error": None, "error_code": None, "llm_calls": []}
 
 
@@ -105,20 +103,20 @@ def node_extract_text(state: dict) -> dict:
                         return fail(state, ErrorCode.INPUT_TOO_LARGE,
                                     f"Document text exceeds the {MAX_INPUT_CHARS} character limit")
     except Exception as e:
-        logger.error(f"Job {job_id}: PDF read failed: {e}")
+        logger.error("Job %s: PDF read failed: %s", job_id, e)
         return fail(state, ErrorCode.PDF_READ_FAILED, f"PDF read failed: {str(e)}")
 
     if not text.strip():
-        logger.warning(f"Job {job_id}: No text layer, likely a scanned PDF")
+        logger.warning("Job %s: No text layer, likely a scanned PDF", job_id)
         return fail(state, ErrorCode.SCANNED, "Scanned PDFs not supported yet")
 
     clean_text = sanitize_text(text)
     if len(clean_text) > MAX_INPUT_CHARS:
-        logger.warning(f"Job {job_id}: {len(clean_text)} chars exceeds the {MAX_INPUT_CHARS} char input cap")
+        logger.warning("Job %s: %d chars exceeds the %d char input cap", job_id, len(clean_text), MAX_INPUT_CHARS)
         return fail(state, ErrorCode.INPUT_TOO_LARGE,
                     f"Document text is {len(clean_text)} characters; the limit is {MAX_INPUT_CHARS}")
 
-    logger.info(f"Job {job_id}: Extracted {len(clean_text)} chars")
+    logger.info("Job %s: Extracted %d chars", job_id, len(clean_text))
     return {**state, "raw_text": clean_text}
 
 
@@ -131,11 +129,11 @@ def node_detect_format(state: dict) -> dict:
     try:
         formats = list_available_formats(client_id)
     except Exception as e:
-        logger.error(f"Job {job_id}: Could not load format library: {e}")
+        logger.error("Job %s: Could not load format library: %s", job_id, e)
         return fail(state, ErrorCode.FORMAT_LIBRARY_ERROR, f"Could not load format library: {str(e)}")
 
     format_id = detect_format_id(state.get("raw_text", ""), formats)
-    logger.info(f"Job {job_id}: Detected format '{format_id}' for client '{client_id}'")
+    logger.info("Job %s: Detected format '%s' for client '%s'", job_id, format_id, client_id)
     return {**state, "client_id": client_id, "format_id": format_id}
 
 
@@ -189,16 +187,16 @@ def run_extraction(raw_text: str, job_id: str, model: str, llm_calls: list) -> t
                 f"error below. Re-read the document and return corrected values.\n{last_validation_error}"
             )
         try:
-            logger.info(f"Job {job_id}: Extraction attempt {attempt} on {model}")
+            logger.info("Job %s: Extraction attempt %d on %s", job_id, attempt, model)
             result = extract_structured(EXTRACTION_SYSTEM_PROMPT, message, StatementDraft, model=model)
         except anthropic.APIError as e:
-            logger.error(f"Job {job_id}: API error: {e}")
+            logger.error("Job %s: API error: %s", job_id, e)
             return None, (ErrorCode.API_ERROR, f"Claude API error: {str(e)}")
 
         llm_calls.append({"attempt": attempt, **result.usage()})
 
         if result.truncated:
-            logger.error(f"Job {job_id}: Output truncated at {result.output_tokens} tokens")
+            logger.error("Job %s: Output truncated at %s tokens", job_id, result.output_tokens)
             return None, (ErrorCode.TRUNCATED_OUTPUT,
                           f"Model output was cut off at {result.output_tokens} tokens; raise CLAUDE_MAX_TOKENS")
         if result.refused:
@@ -210,10 +208,10 @@ def run_extraction(raw_text: str, job_id: str, model: str, llm_calls: list) -> t
             last_validation_error = "; ".join(
                 f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in e.errors()
             )
-            logger.warning(f"Job {job_id}: Validation failed on attempt {attempt}: {last_validation_error}")
+            logger.warning("Job %s: Validation failed on attempt %d: %s", job_id, attempt, last_validation_error)
             continue
 
-        logger.info(f"Job {job_id}: Extraction validated on attempt {attempt}")
+        logger.info("Job %s: Extraction validated on attempt %d", job_id, attempt)
         return validated.model_dump(), None
 
     return None, (ErrorCode.SCHEMA_INVALID, f"Validation failed after retry: {last_validation_error}")
@@ -237,7 +235,7 @@ def node_extract_fields(state: dict) -> dict:
         return {**state, "validated_data": data, "llm_calls": llm_calls, "escalated": False,
                 "accepted_model": CLAUDE_MODEL}
     if error[0] == ErrorCode.SCHEMA_INVALID and ESCALATION_MODEL:
-        logger.info(f"Job {job_id}: Schema failed on {CLAUDE_MODEL}; escalating to {ESCALATION_MODEL}")
+        logger.info("Job %s: Schema failed on %s; escalating to %s", job_id, CLAUDE_MODEL, ESCALATION_MODEL)
         data, second = run_extraction(state.get("raw_text", ""), job_id, ESCALATION_MODEL, llm_calls)
         if not second:
             return {**state, "validated_data": data, "llm_calls": llm_calls, "escalated": True,
@@ -260,12 +258,12 @@ def node_repair(state: dict) -> dict:
 
     job_id = state.get("job_id", "")
     llm_calls = list(state.get("llm_calls") or [])
-    logger.info(f"Job {job_id}: Reconciliation failed on {CLAUDE_MODEL}; repair agent on {ESCALATION_MODEL}")
+    logger.info("Job %s: Reconciliation failed on %s; repair agent on %s", job_id, CLAUDE_MODEL, ESCALATION_MODEL)
     try:
         outcome = run_repair(state.get("validated_data") or {}, state.get("raw_text", ""),
                              state.get("review_reasons") or [], ESCALATION_MODEL, llm_calls, job_id)
     except anthropic.APIError as e:
-        logger.warning(f"Job {job_id}: Repair failed (API error); keeping first extraction for review")
+        logger.warning("Job %s: Repair failed (API error); keeping first extraction for review", job_id)
         return {**state, "llm_calls": llm_calls, "escalated": True,
                 "escalation_error": f"{ErrorCode.API_ERROR}: Claude API error: {e}"}
     repaired = {**state, "llm_calls": llm_calls, "escalated": True, "repair": outcome.as_dict()}
@@ -290,13 +288,13 @@ def node_reconcile(state: dict) -> dict:
         reasons.append(f"escalation: {state['escalation_error']}")
 
     if result.ok and not state.get("escalation_error"):
-        logger.info(f"Job {job_id}: Reconciled" + (" after escalation" if state.get("escalated") else ""))
+        logger.info("Job %s: Reconciled%s", job_id, " after escalation" if state.get("escalated") else "")
         return {**state, "reconciliation": result.as_dict(), "status": str(Status.OK), "review_reasons": []}
 
     repair = state.get("repair")
     if repair and repair["outcome"] != "finished":
         reasons.append(f"repair agent ({repair['outcome']}): {repair['summary'] or 'no fix found'}")
-    logger.warning(f"Job {job_id}: Reconciliation failed: {'; '.join(reasons)}")
+    logger.warning("Job %s: Reconciliation failed: %s", job_id, "; ".join(reasons))
     return {**state, "reconciliation": result.as_dict(), "status": str(Status.NEEDS_REVIEW), "review_reasons": reasons}
 
 
