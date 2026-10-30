@@ -14,15 +14,20 @@ accounts owned by one person, and keying on displayed columns would make
 dedup depend on layout.
 """
 
-import fcntl
 import logging
 import math
 import os
 import tempfile
+import threading
 from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:  # Windows has no flock; writers then serialise within one process only.
+    fcntl = None
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell import Cell
@@ -35,6 +40,7 @@ REVIEW_SHEET = "Needs review"
 SUMMARY_SHEET = "Run summary"
 REVIEW_EXTRA_HEADERS = ["Reasons", "Balance delta", "Source file"]
 ROW_KEY_HEADER = "Row key"
+_PROCESS_LOCK = threading.Lock()
 
 
 def _fold(value) -> str:
@@ -115,6 +121,10 @@ def _exclusive(target: Path):
 
     The atomic replace prevents a torn file, but without this lock two writers both load
     the same old workbook and the second save silently drops the first one's rows."""
+    if fcntl is None:
+        with _PROCESS_LOCK:
+            yield
+        return
     lock_path = target.with_name(f".{target.name}.lock")
     with open(lock_path, "a") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)

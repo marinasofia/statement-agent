@@ -89,6 +89,10 @@ Then open `outputs/demo-review.html` and follow [the review walkthrough](docs/re
 
 The cases cover US, Swiss, European and UK formats, comma decimals, dotted and month name dates, an overdraft, a statement with no transactions, and one with no opening balance, where the balance check is reported as skipped rather than passed. Costs and timings come from the original live run and are stored with the recordings in [`evals/results.json`](evals/results.json).
 
+### Limitations
+
+All fixtures come from one generator and share one layout, so the eval shows that the pipeline is correct on that layout, not that it generalises. The replay in CI guards the deterministic code around the model, not the model itself: re-recording with `make eval-record` is what measures model drift. The recordings date from 2026-09-03 and were made with `claude-haiku-4-5-20251001` as the extraction model and `claude-sonnet-5` as the escalation model, which the recordings never reached. Real bank layouts with debit and credit columns, multi currency pages and scanned pages are not covered.
+
 ## Design decisions
 
 **Arithmetic decides trust, not the model.** A model can sound sure about a wrong number. Balances either reconcile to the cent or they do not, so [`reconcile.py`](agents/statement_extraction/reconcile.py) is plain code with no model call, and its verdict is the one that counts.
@@ -103,13 +107,19 @@ The cases cover US, Swiss, European and UK formats, comma decimals, dotted and m
 
 **Runs resume instead of repeating paid calls.** Each result is saved the moment it finishes, keyed by the SHA-256 of the file's bytes. A crash loses only the files in flight, a renamed copy is recognized, and an edited file is extracted again. Saved results drop the raw statement text, and the database is readable by its owner only.
 
+## What I learned
+
+* Structured outputs remove JSON parsing but not wrong values. The schema guaranteed a well formed object; the arithmetic check found the bugs the schema missed.
+* Recording model responses made the eval free to run in CI, and it forced a stable prompt key: any change to the prompt, the schema or the model invalidates the recording on purpose.
+* A tool that refuses an ungrounded edit is a better guard than a prompt asking the model to be careful.
+
 ## Project layout
 
 ```text
 agents/statement_extraction/   graph, nodes, schema, reconcile, repair agent
 core/                          LLM client, recordings, Excel, review queue, result store
 evals/                         fixture builder, eval runner, recordings, results
-tests/                         142 tests
+tests/                         about 140 tests
 run_batch.py                   batch CLI
 review.py                      review queue CLI
 docs/                          review workflow, output contracts, technical reference
@@ -117,12 +127,14 @@ docs/                          review workflow, output contracts, technical refe
 
 ## Tests
 
-142 tests run in about a second with no API key, 22 of them for the repair agent and its tools. They cover reconciliation, schema retries, escalation, batch failures, the result store, the review queue and the Excel output contract. A full repair run is tested with scripted model turns on a statement whose fee is printed outside the transaction table.
+About 140 tests run in about a second with no API key, 22 of them for the repair agent and its tools. They cover reconciliation, schema retries, escalation, batch failures, the result store, the review queue and the Excel output contract. A full repair run is tested with scripted model turns on a statement whose fee is printed outside the transaction table.
 
 ## More
 
 [Technical reference](docs/technical-reference.md) · [Output contracts](docs/output-contracts.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 Python · LangGraph · Anthropic SDK · Pydantic · pdfplumber · openpyxl · SQLite
+
+Built privately during 2026 and published as one commit on 2026-10-05; development continues in the open.
 
 MIT licensed. All fixtures are synthetic: every name, bank and account number is invented.
