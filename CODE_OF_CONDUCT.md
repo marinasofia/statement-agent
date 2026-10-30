@@ -9,8 +9,8 @@ deliberate disruption, and disclosure of private information are unacceptable.
 
 ## Reporting and response
 
-Report concerns privately to the maintainer using the email address on the [portfolio contact page](https://marinasofia.github.io/#s06)
-with the subject `Community conduct`. Include the relevant context and links,
+Report concerns privately through **Report a vulnerability** in this repository's
+Security tab, with the title `Community conduct`. Include the relevant context and links,
 and share only the personal information needed to investigate. Do not file a
 public issue containing sensitive allegations or personal information.
 

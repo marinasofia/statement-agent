@@ -5,6 +5,9 @@ not for billing. Unknown models get None rather than a made-up number.
 Order matters: the first prefix that matches wins.
 """
 
+# USD per million input and output tokens, the figures behind the costs in
+# evals/results.json (recorded 2026-09-03). Check the provider's pricing page
+# before relying on them for anything but the run summary.
 PRICES_PER_MILLION = [
     ("claude-haiku-4-5", 1.00, 5.00),
     ("claude-sonnet-5", 2.00, 10.00),

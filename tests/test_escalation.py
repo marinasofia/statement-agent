@@ -6,7 +6,6 @@ import pytest
 
 from agents.statement_extraction import nodes, repair
 from agents.statement_extraction.graph import build_graph
-from agents.statement_extraction.schema import ErrorCode
 from core.llm import LLMResult, ToolTurn
 
 GOOD = {
@@ -132,7 +131,8 @@ def test_agent_claiming_success_does_not_make_the_statement_ok(monkeypatch, run)
 
 
 def test_escalation_api_failure_keeps_first_result_for_review(monkeypatch, run):
-    import anthropic, httpx
+    import anthropic
+    import httpx
     err = anthropic.APIStatusError("overloaded", response=httpx.Response(529, request=httpx.Request("POST", "https://x")), body=None)
     fake = FakeLLM(result(MISSED_ROW))
     monkeypatch.setattr(nodes, "extract_structured", fake)
@@ -178,7 +178,8 @@ def test_injected_holder_that_is_not_in_the_document_is_caught(monkeypatch, run)
 def test_full_run_on_the_fee_statement_with_scripted_models(monkeypatch):
     """The whole graph on a real fixture PDF: the cheap model misses a fee printed
     under the table, and the repair agent finds it by amount and adds it from its line."""
-    import os, shutil
+    import os
+    import shutil
     from pathlib import Path
     from core.config import ALLOWED_UPLOAD_DIR
     folder = Path(__file__).resolve().parent / "fixtures" / "fee_outside_table"

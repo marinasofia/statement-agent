@@ -68,22 +68,31 @@ def test_unreconciled_rows_go_to_the_review_sheet_with_reasons(tmp_path, monkeyp
     assert wb["2026-08"].max_row == 2
 
 
-def test_same_holder_different_account_or_balance_is_not_a_duplicate(tmp_path, monkeypatch):
-    # The default client only displays holder and balance. Dedup must still
-    # tell two accounts apart and two statements for one account apart.
+def test_default_client_writes_the_six_library_columns(tmp_path, monkeypatch):
     monkeypatch.setenv("CLIENT_ID", "default")
+    out = tmp_path / "book.xlsx"
+    write_workbook([result("Jane Doe", "111")], str(out), "default")
+    header = [c.value for c in load_workbook(out)["2026-08"][1]]
+    assert header == ["Account Holder", "Bank Name", "Account Number", "Closing Balance",
+                      "Currency", "Statement Date", "Row key"]
+
+
+def test_same_holder_different_account_or_balance_is_not_a_duplicate(tmp_path, monkeypatch):
+    # The example client only displays holder and balance. Dedup must still
+    # tell two accounts apart and two statements for one account apart.
+    monkeypatch.setenv("CLIENT_ID", "example")
     out = tmp_path / "book.xlsx"
     counts = write_workbook(
         [result("Alex Morgan", "111", balance=100.0),
          result("Alex Morgan", "222", balance=100.0),            # second account
          result("Alex Morgan", "111", balance=250.0),            # different statement, same account
          result("ALEX  MORGAN", "11-1", balance=100.0)],         # same statement, formatting noise
-        str(out), "default",
+        str(out), "example",
     )
     assert counts["ok"] == 3 and counts["duplicate"] == 1
     ws = load_workbook(out)["2026-08"]
     header = [c.value for c in ws[1]]
-    assert header[-1] == "Row key"
+    assert header == ["Account Holder", "Closing Balance", "Row key"]
     assert ws.column_dimensions[ws.cell(row=1, column=len(header)).column_letter].hidden
 
 

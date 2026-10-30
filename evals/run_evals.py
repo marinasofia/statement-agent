@@ -7,7 +7,9 @@
 Scores per fixture: closing balance, opening balance, account number,
 currency, account holder (case and whitespace folded), transaction count,
 transaction sum, statement date, and the expected status or error code.
-Writes evals/results.json and prints a table. Exits non-zero if any
+Writes outputs/eval-replay.json (or --out) and prints a table. The tracked
+evals/results.json is the published snapshot; refresh it with
+`make eval-snapshot`. Exits non-zero if any
 fixture's required checks fail, so CI catches a regression in the prompt,
 the schema, or the deterministic code around them.
 """
@@ -17,10 +19,12 @@ import json
 import os
 import statistics
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 EVALS_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = EVALS_DIR.parent
 FIXTURES = EVALS_DIR / "fixtures"
 CASSETTES = EVALS_DIR / "cassettes"
 
@@ -113,7 +117,6 @@ def run(mode: str, only=None) -> dict:
         })
 
     # Batch-level check: the duplicate fixture must be deduplicated by the workbook.
-    import tempfile
     with tempfile.TemporaryDirectory() as tmp:
         counts = write_workbook(states, os.path.join(tmp, "evals.xlsx"), "default")
     dup_expected = sum(1 for c in cases if json.loads((c / "expected.json").read_text()).get("duplicate_of"))
@@ -182,10 +185,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--mode", choices=["live", "record", "replay"], default="live")
     parser.add_argument("--only", nargs="*", help="Fixture names to run")
-    parser.add_argument("--out", default=str(EVALS_DIR / "results.json"))
+    parser.add_argument("--out", default=str(PROJECT_ROOT / "outputs" / "eval-replay.json"))
     args = parser.parse_args(argv)
 
     report = run(args.mode, args.only)
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(report, indent=2) + "\n")
     print_report(report)
     print(f"\nWrote {args.out}")

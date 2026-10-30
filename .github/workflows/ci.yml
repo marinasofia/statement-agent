@@ -19,6 +19,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --locked --extra dev
+      - run: uv run --frozen --no-sync ruff check .
       - run: uv run --frozen --no-sync python -m pytest -q
       - name: Evals (replayed model responses, no API key)
         run: uv run --frozen --no-sync python -m evals.run_evals --mode replay

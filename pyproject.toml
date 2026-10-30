@@ -20,6 +20,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "reportlab>=4.0",
+    "ruff>=0.14",
 ]
 
 [build-system]
@@ -31,3 +32,12 @@ packages = ["agents", "agents.statement_extraction", "core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F"]
+# Style only: long lines, compact one line statements and small lambdas in
+# the tests and the reconcile code are deliberate.
+ignore = ["E501", "E701", "E702", "E731"]

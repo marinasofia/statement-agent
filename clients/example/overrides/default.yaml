@@ -1,0 +1,7 @@
+# Example of a per client override. It deep merges over
+# formats_library/default.yaml, so it only states what differs: this client
+# wants a two column workbook. Select it with CLIENT_ID=example.
+excel_output:
+  columns:
+    - account_holder
+    - closing_balance
